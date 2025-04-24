@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -21,6 +20,7 @@ type NotesContextType = {
   deleteNote: (id: string) => void;
   getFolders: () => string[];
   getNotesByFolder: (folder: string) => Note[];
+  moveNoteToFolder: (noteId: string, targetFolder: string) => void;
 };
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
@@ -135,19 +135,16 @@ Clicking on these links will navigate to the referenced note.`,
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notes, setNotes] = useState<Note[]>(() => {
-    // Load notes from localStorage if available
     const savedNotes = localStorage.getItem("nebula-notes");
     return savedNotes ? JSON.parse(savedNotes) : initialNotes;
   });
   
   const [activeNote, setActiveNote] = useState<Note | null>(null);
 
-  // Save notes to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem("nebula-notes", JSON.stringify(notes));
   }, [notes]);
 
-  // Set the first note as active when loading the app
   useEffect(() => {
     if (notes.length > 0 && !activeNote) {
       setActiveNote(notes[0]);
@@ -178,7 +175,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     setNotes(updatedNotes);
     
-    // If updating the active note, update that reference too
     if (activeNote && activeNote.id === updatedNote.id) {
       setActiveNote({ ...updatedNote, updatedAt: new Date() });
     }
@@ -188,7 +184,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const filteredNotes = notes.filter(note => note.id !== id);
     setNotes(filteredNotes);
     
-    // If deleting the active note, select another note or set to null
     if (activeNote && activeNote.id === id) {
       if (filteredNotes.length > 0) {
         setActiveNote(filteredNotes[0]);
@@ -200,12 +195,20 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const getFolders = () => {
     const folders = notes.map(note => note.folder);
-    // Get unique folders and filter out empty strings
     return [...new Set(folders)].filter(folder => folder);
   };
 
   const getNotesByFolder = (folder: string) => {
     return notes.filter(note => note.folder === folder);
+  };
+
+  const moveNoteToFolder = (noteId: string, targetFolder: string) => {
+    const updatedNotes = notes.map(note => 
+      note.id === noteId 
+        ? { ...note, folder: targetFolder, updatedAt: new Date() }
+        : note
+    );
+    setNotes(updatedNotes);
   };
 
   return (
@@ -218,7 +221,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateNote,
         deleteNote,
         getFolders,
-        getNotesByFolder
+        getNotesByFolder,
+        moveNoteToFolder
       }}
     >
       {children}

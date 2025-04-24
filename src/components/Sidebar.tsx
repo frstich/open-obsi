@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Folder, File, Search, Settings, Plus, ChevronDown, ChevronRight, Menu } from 'lucide-react';
 import { useNotes, Note } from '../context/NotesContext';
@@ -6,6 +5,9 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { toast } from "sonner";
 
 type SidebarProps = {
   isCollapsed: boolean;
@@ -13,7 +15,7 @@ type SidebarProps = {
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle }) => {
-  const { notes, activeNote, setActiveNote, createNote, getFolders, getNotesByFolder } = useNotes();
+  const { notes, activeNote, setActiveNote, createNote, getFolders, getNotesByFolder, moveNoteToFolder } = useNotes();
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [searchText, setSearchText] = useState('');
 
@@ -33,12 +35,25 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle }) => {
 
   const handleCreateNote = (folder: string = '') => {
     createNote(folder);
-    // Auto-expand the folder when creating a note in it
     if (folder) {
       setExpandedFolders(prev => ({
         ...prev,
         [folder]: true
       }));
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over) return;
+
+    const noteId = active.id as string;
+    const targetFolder = over.id as string;
+    
+    if (noteId && targetFolder) {
+      moveNoteToFolder(noteId, targetFolder);
+      toast.success("Note moved successfully");
     }
   };
 
@@ -103,54 +118,79 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle }) => {
                 )}
               </div>
             ) : (
-              <div className="px-2 py-1">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="text-xs text-obsidian-lightgray">NOTES</div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
-                        onClick={() => handleCreateNote()}
-                      >
-                        <Plus size={14} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>New Note</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
+              <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <div className="px-2 py-1">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-xs text-obsidian-lightgray">NOTES</div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
+                          onClick={() => handleCreateNote()}
+                        >
+                          <Plus size={14} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>New Note</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
 
-                {/* Folders */}
-                {folders.map(folder => (
-                  <div key={folder} className="mb-1">
-                    <div 
-                      className="flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer hover:bg-obsidian-hover text-sm"
-                      onClick={() => toggleFolder(folder)}
-                    >
-                      {isExpanded(folder) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      <Folder size={14} className="text-obsidian-lightgray" />
-                      <span className="truncate">{folder}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-5 w-5 ml-auto text-obsidian-lightgray hover:text-obsidian-purple"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCreateNote(folder);
-                        }}
+                  <SortableContext items={notes.map(note => note.id)} strategy={verticalListSortingStrategy}>
+                    {folders.map(folder => (
+                      <div 
+                        key={folder} 
+                        className="mb-1"
+                        id={folder}
                       >
-                        <Plus size={12} />
-                      </Button>
-                    </div>
-                    
-                    {isExpanded(folder) && getNotesByFolder(folder).map((note: Note) => (
+                        <div 
+                          className="flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer hover:bg-obsidian-hover text-sm"
+                          onClick={() => toggleFolder(folder)}
+                        >
+                          {isExpanded(folder) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          <Folder size={14} className="text-obsidian-lightgray" />
+                          <span className="truncate">{folder}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-5 w-5 ml-auto text-obsidian-lightgray hover:text-obsidian-purple"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCreateNote(folder);
+                            }}
+                          >
+                            <Plus size={12} />
+                          </Button>
+                        </div>
+                        
+                        {isExpanded(folder) && getNotesByFolder(folder).map((note: Note) => (
+                          <div
+                            key={note.id}
+                            id={note.id}
+                            draggable
+                            className={cn(
+                              "flex items-center gap-1 px-7 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
+                              activeNote?.id === note.id ? "bg-obsidian-selected" : ""
+                            )}
+                            onClick={() => setActiveNote(note)}
+                          >
+                            <File size={14} className="text-obsidian-lightgray" />
+                            <span className="truncate">{note.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                    {unfolderedNotes.map(note => (
                       <div
                         key={note.id}
+                        id={note.id}
+                        draggable
                         className={cn(
-                          "flex items-center gap-1 px-7 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
+                          "flex items-center gap-1 px-2 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
                           activeNote?.id === note.id ? "bg-obsidian-selected" : ""
                         )}
                         onClick={() => setActiveNote(note)}
@@ -159,24 +199,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle }) => {
                         <span className="truncate">{note.title}</span>
                       </div>
                     ))}
-                  </div>
-                ))}
-
-                {/* Notes without folders */}
-                {unfolderedNotes.map(note => (
-                  <div
-                    key={note.id}
-                    className={cn(
-                      "flex items-center gap-1 px-2 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
-                      activeNote?.id === note.id ? "bg-obsidian-selected" : ""
-                    )}
-                    onClick={() => setActiveNote(note)}
-                  >
-                    <File size={14} className="text-obsidian-lightgray" />
-                    <span className="truncate">{note.title}</span>
-                  </div>
-                ))}
-              </div>
+                  </SortableContext>
+                </div>
+              </DndContext>
             )}
           </>
         ) : (
