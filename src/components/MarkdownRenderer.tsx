@@ -53,9 +53,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
               {children}
             </a>
           ),
-          code({ node, inline, className, children, ...props }) {
+          code: ({ node, className, children, ...props }: any) => {
             const match = /language-(\w+)/.exec(className || '');
-            return !inline && match ? (
+            return !props.inline && match ? (
               <SyntaxHighlighter
                 style={atomDark}
                 language={match[1]}
