@@ -8,10 +8,11 @@ const Index = () => {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  // Listen for command palette keyboard shortcut (Ctrl+P)
+  // Listen for command palette keyboard shortcut (Ctrl+P or Cmd+P)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      // Fix for Windows: Use keyCode as a fallback for older browsers
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.keyCode === 80)) {
         e.preventDefault();
         setCommandPaletteOpen(true);
       }
@@ -25,9 +26,19 @@ const Index = () => {
     setSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  // Expose command palette to global scope for easier access
+  useEffect(() => {
+    const openCommandPalette = () => setCommandPaletteOpen(true);
+    (window as any).openCommandPalette = openCommandPalette;
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar isCollapsed={isSidebarCollapsed} toggle={toggleSidebar} />
+      <Sidebar 
+        isCollapsed={isSidebarCollapsed} 
+        toggle={toggleSidebar} 
+        openCommandPalette={() => setCommandPaletteOpen(true)}
+      />
       <Editor isCollapsed={isSidebarCollapsed} />
 
       <CommandPalette 

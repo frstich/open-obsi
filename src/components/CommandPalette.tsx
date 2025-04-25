@@ -2,8 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNotes, Note } from '../context/NotesContext';
-import { CommandItem } from '@/components/ui/command';
-import { File, PlusCircle, Search, X } from 'lucide-react';
+import { CommandDialog, CommandInput, CommandList, CommandItem, CommandGroup } from '@/components/ui/command';
+import { File, FolderPlus, PlusCircle, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CommandPaletteProps {
@@ -12,19 +12,22 @@ interface CommandPaletteProps {
 }
 
 const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
-  const { notes, setActiveNote, createNote } = useNotes();
+  const { notes, setActiveNote, createNote, getFolders } = useNotes();
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredItems, setFilteredItems] = useState<
-    Array<{ type: 'note' | 'command'; item: Note | string; title: string }>
+    Array<{ type: 'note' | 'command' | 'folder'; item: Note | string; title: string }>
   >([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const folders = getFolders();
 
   // Focus input on open
   useEffect(() => {
     if (isOpen && inputRef.current) {
-      inputRef.current.focus();
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
     }
   }, [isOpen]);
 
@@ -37,27 +40,39 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
         title: note.title 
       }));
       
+      const folderItems = folders.map(folder => ({
+        type: 'folder' as const,
+        item: folder,
+        title: `Folder: ${folder}`
+      }));
+      
       const commands = [
-        { type: 'command' as const, item: 'new-note', title: 'Create new note' }
+        { type: 'command' as const, item: 'new-note', title: 'Create new note' },
+        { type: 'command' as const, item: 'new-folder', title: 'Create new folder' }
       ];
       
-      setFilteredItems([...commands, ...allNotes]);
+      setFilteredItems([...commands, ...folderItems, ...allNotes]);
       return;
     }
 
     const matchingNotes = notes
       .filter(note => 
         note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        note.content.toLowerCase().includes(searchQuery.toLowerCase())
+        note.content?.toLowerCase().includes(searchQuery.toLowerCase())
       )
       .map(note => ({ type: 'note' as const, item: note, title: note.title }));
 
+    const matchingFolders = folders
+      .filter(folder => folder.toLowerCase().includes(searchQuery.toLowerCase()))
+      .map(folder => ({ type: 'folder' as const, item: folder, title: `Folder: ${folder}` }));
+
     const matchingCommands = [
-      { type: 'command' as const, item: 'new-note', title: 'Create new note' }
+      { type: 'command' as const, item: 'new-note', title: 'Create new note' },
+      { type: 'command' as const, item: 'new-folder', title: 'Create new folder' }
     ].filter(cmd => cmd.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    setFilteredItems([...matchingCommands, ...matchingNotes]);
-  }, [searchQuery, notes]);
+    setFilteredItems([...matchingCommands, ...matchingFolders, ...matchingNotes]);
+  }, [searchQuery, notes, folders]);
 
   // Reset selected index when filtered items change
   useEffect(() => {
@@ -92,12 +107,23 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const handleSelect = (item: typeof filteredItems[0]) => {
     if (item.type === 'note') {
       setActiveNote(item.item as Note);
+      onClose();
     } else if (item.type === 'command') {
       if (item.item === 'new-note') {
         createNote();
+        onClose();
+      } else if (item.item === 'new-folder') {
+        // We'll handle this via a callback to the parent component
+        const folderName = prompt("Enter folder name:");
+        if (folderName) {
+          createNote(folderName);
+          onClose();
+        }
       }
+    } else if (item.type === 'folder') {
+      createNote(item.item as string);
+      onClose();
     }
-    onClose();
   };
 
   // Scroll selected item into view
@@ -121,17 +147,11 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search notes or commands..."
+            placeholder="Search notes, folders or commands... (Ctrl+P)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-transparent py-2 px-3 focus:outline-none text-obsidian-foreground"
           />
-          <button 
-            onClick={onClose}
-            className="p-1 rounded hover:bg-obsidian-hover text-obsidian-lightgray"
-          >
-            <X size={20} />
-          </button>
         </div>
         
         <div className="max-h-[60vh] overflow-y-auto p-1" ref={listRef}>
@@ -140,24 +160,32 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
               No results found
             </div>
           ) : (
-            filteredItems.map((item, index) => (
-              <div
-                key={item.type === 'note' ? (item.item as Note).id : item.item as string}
-                className={cn(
-                  "command-item",
-                  index === selectedIndex && "selected"
-                )}
-                onClick={() => handleSelect(item)}
-                onMouseEnter={() => setSelectedIndex(index)}
-              >
-                {item.type === 'note' ? (
-                  <File size={16} className="text-obsidian-lightgray" />
-                ) : (
-                  <PlusCircle size={16} className="text-obsidian-lightgray" />
-                )}
-                <span>{item.title}</span>
-              </div>
-            ))
+            filteredItems.map((item, index) => {
+              const id = item.type === 'note' 
+                ? (item.item as Note).id 
+                : `${item.type}-${item.item as string}`;
+                
+              return (
+                <div
+                  key={id}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 text-sm rounded cursor-pointer",
+                    index === selectedIndex ? "bg-obsidian-selected" : "hover:bg-obsidian-hover"
+                  )}
+                  onClick={() => handleSelect(item)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  {item.type === 'note' ? (
+                    <File size={16} className="text-obsidian-lightgray" />
+                  ) : item.type === 'folder' ? (
+                    <FolderPlus size={16} className="text-obsidian-lightgray" />
+                  ) : (
+                    <PlusCircle size={16} className="text-obsidian-lightgray" />
+                  )}
+                  <span>{item.title}</span>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
