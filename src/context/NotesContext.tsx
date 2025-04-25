@@ -1,14 +1,13 @@
 import React, { createContext, useState, useContext, useEffect } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export type Note = {
   id: string;
   title: string;
   content: string;
-  createdAt: Date;
-  updatedAt: Date;
-  path: string;
-  folder: string;
+  created_at: Date;
+  updated_at: Date;
 };
 
 type NotesContextType = {
@@ -25,171 +24,153 @@ type NotesContextType = {
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
 
-const initialNotes: Note[] = [
-  {
-    id: uuidv4(),
-    title: "Welcome to Nebula Notes",
-    content: `# Welcome to Nebula Notes
-
-This is your first note. You can edit it or create new ones.
-
-## Features:
-- Create and organize notes in folders
-- Format text using Markdown syntax
-- Link between notes using [[Note Title]] syntax
-- Search for notes using the command palette (Ctrl+P)
-
-## Markdown Guide:
-You can use Markdown to format your notes:
-- **Bold text**
-- *Italic text*
-- # Headings
-- [Links](https://example.com)
-- Lists (like this one)
-- \`Code blocks\`
-- > Blockquotes
-
-Happy note-taking!`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    path: "Welcome to Nebula Notes",
-    folder: ""
-  },
-  {
-    id: uuidv4(),
-    title: "Markdown Guide",
-    content: `# Markdown Guide
-
-Markdown is a lightweight markup language that you can use to add formatting elements to plaintext text documents.
-
-## Basic Syntax
-
-### Headings
-# Heading 1
-## Heading 2
-### Heading 3
-
-### Emphasis
-*Italic text* or _Italic text_
-**Bold text** or __Bold text__
-***Bold and italic text***
-
-### Lists
-#### Unordered Lists
-- Item 1
-- Item 2
-  - Subitem 2.1
-  - Subitem 2.2
-
-#### Ordered Lists
-1. First item
-2. Second item
-3. Third item
-
-### Links
-[Link text](URL)
-[Visit OpenAI](https://openai.com)
-
-### Images
-![Alt text](URL)
-
-### Blockquotes
-> This is a blockquote
-
-### Code
-Inline code: \`var example = "hello";\`
-
-Code blocks:
-\`\`\`javascript
-function hello() {
-  console.log("Hello, world!");
-}
-\`\`\`
-
-### Horizontal Rules
----
-
-## Advanced Markdown
-
-### Tables
-| Header 1 | Header 2 |
-| -------- | -------- |
-| Cell 1   | Cell 2   |
-| Cell 3   | Cell 4   |
-
-### Task Lists
-- [x] Completed task
-- [ ] Incomplete task
-
-### Linking to other notes
-In this app, you can link to other notes using double brackets:
-[[Welcome to Nebula Notes]]
-
-Clicking on these links will navigate to the referenced note.`,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    path: "Markdown Guide",
-    folder: "Guides"
-  }
-];
-
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [notes, setNotes] = useState<Note[]>(() => {
-    const savedNotes = localStorage.getItem("nebula-notes");
-    return savedNotes ? JSON.parse(savedNotes) : initialNotes;
-  });
-  
+  const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const [session, setSession] = useState<any>(null);
 
   useEffect(() => {
-    localStorage.setItem("nebula-notes", JSON.stringify(notes));
-  }, [notes]);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setSession(session);
+    });
 
-  useEffect(() => {
-    if (notes.length > 0 && !activeNote) {
-      setActiveNote(notes[0]);
-    }
+    // Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const createNote = (folder: string = "") => {
-    const newNote: Note = {
-      id: uuidv4(),
-      title: "Untitled Note",
-      content: "# Untitled Note",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      path: "Untitled Note",
-      folder
-    };
+  useEffect(() => {
+    if (session?.user) {
+      // Fetch notes when user is authenticated
+      fetchNotes();
 
-    setNotes([...notes, newNote]);
-    setActiveNote(newNote);
-  };
+      // Subscribe to realtime changes
+      const channel = supabase
+        .channel('public:notes')
+        .on('postgres_changes', 
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notes'
+          }, 
+          (payload) => {
+            fetchNotes();
+          }
+        )
+        .subscribe();
 
-  const updateNote = (updatedNote: Note) => {
-    const updatedNotes = notes.map(note => 
-      note.id === updatedNote.id 
-        ? { ...updatedNote, updatedAt: new Date() } 
-        : note
-    );
-    
-    setNotes(updatedNotes);
-    
-    if (activeNote && activeNote.id === updatedNote.id) {
-      setActiveNote({ ...updatedNote, updatedAt: new Date() });
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      setNotes([]);
+      setActiveNote(null);
+    }
+  }, [session]);
+
+  const fetchNotes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      setNotes(data || []);
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+      toast.error('Failed to fetch notes');
     }
   };
 
-  const deleteNote = (id: string) => {
-    const filteredNotes = notes.filter(note => note.id !== id);
-    setNotes(filteredNotes);
-    
-    if (activeNote && activeNote.id === id) {
-      if (filteredNotes.length > 0) {
-        setActiveNote(filteredNotes[0]);
-      } else {
-        setActiveNote(null);
+  const createNote = async (folder: string = "") => {
+    if (!session?.user) {
+      toast.error('Please sign in to create notes');
+      return;
+    }
+
+    try {
+      const newNote = {
+        title: "Untitled Note",
+        content: "# Untitled Note",
+        folder
+      };
+
+      const { data, error } = await supabase
+        .from('notes')
+        .insert(newNote)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setNotes(prev => [data, ...prev]);
+      setActiveNote(data);
+      toast.success('Note created');
+    } catch (error) {
+      console.error('Error creating note:', error);
+      toast.error('Failed to create note');
+    }
+  };
+
+  const updateNote = async (updatedNote: Note) => {
+    if (!session?.user) return;
+
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .update({
+          title: updatedNote.title,
+          content: updatedNote.content,
+        })
+        .eq('id', updatedNote.id);
+
+      if (error) throw error;
+
+      setNotes(prev => 
+        prev.map(note => 
+          note.id === updatedNote.id ? updatedNote : note
+        )
+      );
+      
+      if (activeNote?.id === updatedNote.id) {
+        setActiveNote(updatedNote);
       }
+
+      toast.success('Note updated');
+    } catch (error) {
+      console.error('Error updating note:', error);
+      toast.error('Failed to update note');
+    }
+  };
+
+  const deleteNote = async (id: string) => {
+    if (!session?.user) return;
+
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setNotes(prev => prev.filter(note => note.id !== id));
+      
+      if (activeNote?.id === id) {
+        const nextNote = notes.find(note => note.id !== id);
+        setActiveNote(nextNote || null);
+      }
+
+      toast.success('Note deleted');
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast.error('Failed to delete note');
     }
   };
 
@@ -203,12 +184,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const moveNoteToFolder = (noteId: string, targetFolder: string) => {
-    const updatedNotes = notes.map(note => 
-      note.id === noteId 
-        ? { ...note, folder: targetFolder, updatedAt: new Date() }
-        : note
-    );
-    setNotes(updatedNotes);
+    // Implementation for moving a note to a folder
   };
 
   return (
