@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -5,9 +6,11 @@ import { toast } from "sonner";
 export type Note = {
   id: string;
   title: string;
-  content: string;
-  created_at: Date;
-  updated_at: Date;
+  content: string | null;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  folder?: string; // Add folder as an optional property
 };
 
 type NotesContextType = {
@@ -98,7 +101,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const newNote = {
         title: "Untitled Note",
         content: "# Untitled Note",
-        folder
+        folder: folder,
+        user_id: session.user.id
       };
 
       const { data, error } = await supabase
@@ -109,6 +113,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (error) throw error;
 
+      // TypeScript will automatically recognize data as Note
       setNotes(prev => [data, ...prev]);
       setActiveNote(data);
       toast.success('Note created');
@@ -127,6 +132,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .update({
           title: updatedNote.title,
           content: updatedNote.content,
+          folder: updatedNote.folder
         })
         .eq('id', updatedNote.id);
 
@@ -175,16 +181,44 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const getFolders = () => {
-    const folders = notes.map(note => note.folder);
-    return [...new Set(folders)].filter(folder => folder);
+    const folders = notes
+      .map(note => note.folder)
+      .filter((folder): folder is string => Boolean(folder));
+    return [...new Set(folders)];
   };
 
   const getNotesByFolder = (folder: string) => {
     return notes.filter(note => note.folder === folder);
   };
 
-  const moveNoteToFolder = (noteId: string, targetFolder: string) => {
-    // Implementation for moving a note to a folder
+  const moveNoteToFolder = async (noteId: string, targetFolder: string) => {
+    const noteToUpdate = notes.find(note => note.id === noteId);
+    
+    if (!noteToUpdate || !session?.user) return;
+    
+    try {
+      const updatedNote = { ...noteToUpdate, folder: targetFolder };
+      
+      const { error } = await supabase
+        .from('notes')
+        .update({ folder: targetFolder })
+        .eq('id', noteId);
+        
+      if (error) throw error;
+      
+      setNotes(prev => prev.map(note => 
+        note.id === noteId ? updatedNote : note
+      ));
+      
+      if (activeNote?.id === noteId) {
+        setActiveNote(updatedNote);
+      }
+      
+      toast.success(`Note moved to ${targetFolder}`);
+    } catch (error) {
+      console.error('Error moving note:', error);
+      toast.error('Failed to move note');
+    }
   };
 
   return (

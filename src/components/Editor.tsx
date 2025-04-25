@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNotes, Note } from '../context/NotesContext';
 import { cn } from '@/lib/utils';
@@ -16,7 +17,7 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
 
   useEffect(() => {
     if (activeNote) {
-      setEditedContent(activeNote.content);
+      setEditedContent(activeNote.content || '');
       setEditedTitle(activeNote.title);
     }
   }, [activeNote]);
@@ -28,8 +29,7 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
       ...activeNote,
       title: editedTitle,
       content: editedContent,
-      path: editedTitle,
-      updatedAt: new Date()
+      updated_at: new Date().toISOString()
     };
 
     updateNote(updatedNote);
