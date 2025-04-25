@@ -84,7 +84,9 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (error) throw error;
 
-      setNotes(data || []);
+      // Convert the returned data to our Note type
+      const typedNotes: Note[] = data || [];
+      setNotes(typedNotes);
     } catch (error) {
       console.error('Error fetching notes:', error);
       toast.error('Failed to fetch notes');
@@ -98,24 +100,30 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
-      const newNote = {
+      // Define the note data without folder if it's empty
+      const noteData: any = {
         title: "Untitled Note",
         content: "# Untitled Note",
-        folder: folder,
         user_id: session.user.id
       };
 
+      // Only add folder if it's not empty
+      if (folder) {
+        noteData.folder = folder;
+      }
+
       const { data, error } = await supabase
         .from('notes')
-        .insert(newNote)
+        .insert(noteData)
         .select()
         .single();
 
       if (error) throw error;
 
-      // TypeScript will automatically recognize data as Note
-      setNotes(prev => [data, ...prev]);
-      setActiveNote(data);
+      // Convert to Note type
+      const newNote: Note = data as Note;
+      setNotes(prev => [newNote, ...prev]);
+      setActiveNote(newNote);
       toast.success('Note created');
     } catch (error) {
       console.error('Error creating note:', error);
@@ -127,13 +135,20 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!session?.user) return;
 
     try {
+      // Create an update object with only the fields Supabase expects
+      const updateData: any = {
+        title: updatedNote.title,
+        content: updatedNote.content
+      };
+
+      // Only add folder if it exists in the updated note
+      if (updatedNote.folder !== undefined) {
+        updateData.folder = updatedNote.folder;
+      }
+
       const { error } = await supabase
         .from('notes')
-        .update({
-          title: updatedNote.title,
-          content: updatedNote.content,
-          folder: updatedNote.folder
-        })
+        .update(updateData)
         .eq('id', updatedNote.id);
 
       if (error) throw error;
@@ -199,9 +214,12 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const updatedNote = { ...noteToUpdate, folder: targetFolder };
       
+      // Create an update object with only the folder property
+      const updateData: any = { folder: targetFolder };
+      
       const { error } = await supabase
         .from('notes')
-        .update({ folder: targetFolder })
+        .update(updateData)
         .eq('id', noteId);
         
       if (error) throw error;
