@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNotes, Note } from '../context/NotesContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Save, Trash } from 'lucide-react';
+import { Save, Trash, Copy, CopyCheck } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import MarkdownRenderer from './MarkdownRenderer';
 
@@ -12,6 +11,7 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [editedTitle, setEditedTitle] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,6 +54,30 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
     });
   };
 
+  const handleCopy = () => {
+    if (activeNote && activeNote.content) {
+      navigator.clipboard.writeText(activeNote.content)
+        .then(() => {
+          setIsCopied(true);
+          toast({
+            title: "Copied to Clipboard",
+            description: "Note content has been copied.",
+            duration: 2000,
+          });
+
+          setTimeout(() => setIsCopied(false), 2000);
+        })
+        .catch(err => {
+          toast({
+            title: "Copy Failed",
+            description: "Unable to copy note content.",
+            variant: "destructive",
+            duration: 2000,
+          });
+        });
+    }
+  };
+
   if (!activeNote) {
     return (
       <div className={cn(
@@ -77,7 +101,6 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
         isCollapsed ? "ml-12" : "ml-64"
       )}
     >
-      {/* Editor Header */}
       <div className="border-b border-obsidian-border p-2 flex justify-between items-center">
         <input
           type="text"
@@ -87,6 +110,14 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
           className="bg-transparent text-lg font-semibold flex-1 focus:outline-none focus:border-b focus:border-obsidian-purple"
         />
         <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleCopy}
+            className="text-obsidian-lightgray hover:text-obsidian-purple"
+          >
+            {isCopied ? <CopyCheck size={18} /> : <Copy size={18} />}
+          </Button>
           <Button 
             variant="ghost" 
             size="icon" 
@@ -106,7 +137,6 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
         </div>
       </div>
 
-      {/* Editor Content */}
       <div className="flex-1 flex">
         <div className="w-full h-full flex">
           {isEditing ? (
