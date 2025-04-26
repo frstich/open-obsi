@@ -1,26 +1,41 @@
-
 import React, { useState } from 'react';
-import { Folder, File, Search, Settings, Plus, ChevronDown, ChevronRight, Menu, FolderPlus } from 'lucide-react';
+import { Folder, File, Search, Settings, Plus, ChevronDown, ChevronRight, Menu, FolderPlus, Eye, EyeOff } from 'lucide-react';
 import { useNotes, Note } from '../context/NotesContext';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from "sonner";
-import FolderCreationDialog from './FolderCreationDialog';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import { Input } from '@/components/ui/input';
 
 type SidebarProps = {
   isCollapsed: boolean;
   toggle: () => void;
   openCommandPalette?: () => void;
+  togglePreview: () => void;
+  isPreviewVisible: boolean;
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalette }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  isCollapsed, 
+  toggle, 
+  openCommandPalette,
+  togglePreview,
+  isPreviewVisible
+}) => {
   const { notes, activeNote, setActiveNote, createNote, getFolders, getNotesByFolder, moveNoteToFolder } = useNotes();
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [searchText, setSearchText] = useState('');
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
-  const [isFolderDialogOpen, setIsFolderDialogOpen] = useState(false);
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
 
   const folders = getFolders();
   const unfolderedNotes = notes.filter(note => !note.folder || note.folder === '');
@@ -44,23 +59,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
         [folder]: true
       }));
     }
-  };
-
-  const handleCreateFolder = (folderName: string) => {
-    if (folders.includes(folderName)) {
-      toast.error(`Folder "${folderName}" already exists`);
-      return;
-    }
-    
-    // Create a note in the new folder to establish it
-    createNote(folderName);
-    toast.success(`Folder "${folderName}" created`);
-    
-    // Ensure the new folder is expanded
-    setExpandedFolders(prev => ({
-      ...prev,
-      [folderName]: true
-    }));
   };
 
   // Drag and Drop handlers
@@ -90,6 +88,47 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
     setDraggedNoteId(null);
   };
 
+  const startCreatingFolder = () => {
+    setIsCreatingFolder(true);
+    setNewFolderName('');
+  };
+
+  const handleCreateFolder = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newFolderName.trim()) {
+      createNote(newFolderName.trim());
+      setIsCreatingFolder(false);
+      setNewFolderName('');
+      setExpandedFolders(prev => ({
+        ...prev,
+        [newFolderName.trim()]: true
+      }));
+    } else if (e.key === 'Escape') {
+      setIsCreatingFolder(false);
+    }
+  };
+
+  const startRenamingFolder = (folder: string) => {
+    setEditingFolderId(folder);
+    setNewFolderName(folder);
+  };
+
+  const handleRenameFolder = (e: React.KeyboardEvent<HTMLInputElement>, oldName: string) => {
+    if (e.key === 'Enter' && newFolderName.trim() && newFolderName !== oldName) {
+      // Get all notes in the folder
+      const notesInFolder = getNotesByFolder(oldName);
+      
+      // Move each note to the new folder
+      notesInFolder.forEach(note => {
+        moveNoteToFolder(note.id, newFolderName.trim());
+      });
+      
+      setEditingFolderId(null);
+      toast.success(`Folder renamed to ${newFolderName}`);
+    } else if (e.key === 'Escape') {
+      setEditingFolderId(null);
+    }
+  };
+
   const filteredNotes = searchText
     ? notes.filter(note => 
         note.title.toLowerCase().includes(searchText.toLowerCase()) || 
@@ -105,11 +144,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
       )}>
         <div className="flex items-center p-2 h-12 border-b border-obsidian-border">
           {!isCollapsed && (
-            <h1 className="font-semibold text-lg text-obsidian-foreground flex-1">Nebula Notes</h1>
+            <h1 className="font-semibold text-lg text-obsidian-foreground flex-1">Open Obsi</h1>
           )}
-          <Button variant="ghost" size="icon" onClick={toggle} className="text-obsidian-foreground hover:text-obsidian-purple">
-            <Menu size={18} />
-          </Button>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="icon" onClick={togglePreview} className="text-obsidian-foreground hover:text-obsidian-purple">
+              {isPreviewVisible ? <Eye size={18} /> : <EyeOff size={18} />}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={toggle} className="text-obsidian-foreground hover:text-obsidian-purple">
+              <Menu size={18} />
+            </Button>
+          </div>
         </div>
 
         {!isCollapsed && (
@@ -162,7 +206,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
                             variant="ghost" 
                             size="icon" 
                             className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
-                            onClick={() => setIsFolderDialogOpen(true)}
+                            onClick={startCreatingFolder}
                           >
                             <FolderPlus size={14} />
                           </Button>
@@ -189,54 +233,88 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
                     </div>
                   </div>
 
-                  {folders.map(folder => (
-                    <div 
-                      key={folder} 
-                      className="mb-1"
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, folder)}
-                    >
-                      <div 
-                        className={cn(
-                          "flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer hover:bg-obsidian-hover text-sm",
-                          draggedNoteId ? "bg-obsidian-gray" : ""
-                        )}
-                        onClick={() => toggleFolder(folder)}
-                      >
-                        {isExpanded(folder) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        <Folder size={14} className="text-obsidian-lightgray" />
-                        <span className="truncate">{folder}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 ml-auto text-obsidian-lightgray hover:text-obsidian-purple"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCreateNote(folder);
-                          }}
-                        >
-                          <Plus size={12} />
-                        </Button>
-                      </div>
-                      
-                      {isExpanded(folder) && getNotesByFolder(folder).map((note: Note) => (
-                        <div
-                          key={note.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, note.id)}
-                          onDragEnd={handleDragEnd}
-                          className={cn(
-                            "flex items-center gap-1 px-7 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
-                            activeNote?.id === note.id ? "bg-obsidian-selected" : "",
-                            draggedNoteId === note.id ? "opacity-50" : ""
-                          )}
-                          onClick={() => setActiveNote(note)}
-                        >
-                          <File size={14} className="text-obsidian-lightgray" />
-                          <span className="truncate">{note.title}</span>
-                        </div>
-                      ))}
+                  {isCreatingFolder && (
+                    <div className="mb-1 px-1">
+                      <Input
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        onKeyDown={handleCreateFolder}
+                        placeholder="New folder name..."
+                        className="h-7 text-sm"
+                        autoFocus
+                      />
                     </div>
+                  )}
+
+                  {folders.map(folder => (
+                    <ContextMenu key={folder}>
+                      <ContextMenuTrigger>
+                        <div 
+                          className="mb-1"
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, folder)}
+                        >
+                          <div 
+                            className={cn(
+                              "flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer hover:bg-obsidian-hover text-sm",
+                              draggedNoteId ? "bg-obsidian-gray" : ""
+                            )}
+                            onClick={() => toggleFolder(folder)}
+                          >
+                            {editingFolderId === folder ? (
+                              <Input
+                                value={newFolderName}
+                                onChange={(e) => setNewFolderName(e.target.value)}
+                                onKeyDown={(e) => handleRenameFolder(e, folder)}
+                                className="h-7 text-sm"
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <>
+                                {isExpanded(folder) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                <Folder size={14} className="text-obsidian-lightgray" />
+                                <span className="truncate">{folder}</span>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-5 w-5 ml-auto text-obsidian-lightgray hover:text-obsidian-purple"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCreateNote(folder);
+                                  }}
+                                >
+                                  <Plus size={12} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                          
+                          {isExpanded(folder) && getNotesByFolder(folder).map((note: Note) => (
+                            <div
+                              key={note.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, note.id)}
+                              onDragEnd={handleDragEnd}
+                              className={cn(
+                                "flex items-center gap-1 px-7 py-1 text-sm rounded cursor-pointer hover:bg-obsidian-hover",
+                                activeNote?.id === note.id ? "bg-obsidian-selected" : "",
+                                draggedNoteId === note.id ? "opacity-50" : ""
+                              )}
+                              onClick={() => setActiveNote(note)}
+                            >
+                              <File size={14} className="text-obsidian-lightgray" />
+                              <span className="truncate">{note.title}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem onSelect={() => startRenamingFolder(folder)}>
+                          Rename Folder
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   ))}
 
                   {unfolderedNotes.map(note => (
@@ -311,12 +389,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggle, openCommandPalet
           )}
         </ScrollArea>
       </div>
-      
-      <FolderCreationDialog 
-        isOpen={isFolderDialogOpen}
-        onClose={() => setIsFolderDialogOpen(false)}
-        onCreateFolder={handleCreateFolder}
-      />
     </>
   );
 };

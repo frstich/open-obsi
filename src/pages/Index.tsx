@@ -7,11 +7,11 @@ import CommandPalette from '../components/CommandPalette';
 const Index = () => {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(true);
 
   // Listen for command palette keyboard shortcut (Ctrl+P or Cmd+P)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Fix for Windows: Use keyCode as a fallback for older browsers
       if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P' || e.keyCode === 80)) {
         e.preventDefault();
         setCommandPaletteOpen(true);
@@ -26,6 +26,10 @@ const Index = () => {
     setSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  const togglePreview = () => {
+    setIsPreviewVisible(!isPreviewVisible);
+  };
+
   // Expose command palette to global scope for easier access
   useEffect(() => {
     const openCommandPalette = () => setCommandPaletteOpen(true);
@@ -38,8 +42,13 @@ const Index = () => {
         isCollapsed={isSidebarCollapsed} 
         toggle={toggleSidebar} 
         openCommandPalette={() => setCommandPaletteOpen(true)}
+        togglePreview={togglePreview}
+        isPreviewVisible={isPreviewVisible}
       />
-      <Editor isCollapsed={isSidebarCollapsed} />
+      <Editor 
+        isCollapsed={isSidebarCollapsed}
+        isPreviewVisible={isPreviewVisible}
+      />
 
       <CommandPalette 
         isOpen={isCommandPaletteOpen}

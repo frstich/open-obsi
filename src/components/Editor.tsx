@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNotes, Note } from '../context/NotesContext';
 import { cn } from '@/lib/utils';
@@ -7,7 +6,15 @@ import { Save, Trash, Copy, CopyCheck } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import MarkdownRenderer from './MarkdownRenderer';
 
-const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ className, isCollapsed }) => {
+const Editor: React.FC<{ 
+  className?: string;
+  isCollapsed: boolean;
+  isPreviewVisible: boolean;
+}> = ({ 
+  className, 
+  isCollapsed,
+  isPreviewVisible 
+}) => {
   const { activeNote, updateNote, deleteNote } = useNotes();
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
@@ -138,24 +145,34 @@ const Editor: React.FC<{ className?: string, isCollapsed: boolean }> = ({ classN
       </div>
 
       <div className="flex-1 flex">
-        <div className="w-full h-full flex">
-          {isEditing ? (
-            <textarea
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              className="w-1/2 h-full bg-obsidian resize-none p-4 outline-none font-mono text-sm"
-            />
-          ) : (
-            <div 
-              className="w-1/2 p-4 cursor-text"
-              onClick={() => setIsEditing(true)}
-            >
-              <pre className="font-mono text-sm whitespace-pre-wrap">{editedContent}</pre>
+        <div className={cn(
+          "w-full h-full flex",
+          isPreviewVisible ? "divide-x divide-obsidian-border" : ""
+        )}>
+          <div className={cn(
+            "h-full",
+            isPreviewVisible ? "w-1/2" : "w-full"
+          )}>
+            {isEditing ? (
+              <textarea
+                value={editedContent}
+                onChange={(e) => setEditedContent(e.target.value)}
+                className="w-full h-full bg-obsidian resize-none p-4 outline-none font-mono text-sm"
+              />
+            ) : (
+              <div 
+                className="w-full h-full p-4 cursor-text"
+                onClick={() => setIsEditing(true)}
+              >
+                <pre className="font-mono text-sm whitespace-pre-wrap">{editedContent}</pre>
+              </div>
+            )}
+          </div>
+          {isPreviewVisible && (
+            <div className="w-1/2 overflow-auto p-4">
+              <MarkdownRenderer content={editedContent} />
             </div>
           )}
-          <div className="w-1/2 overflow-auto p-4 border-l border-obsidian-border">
-            <MarkdownRenderer content={editedContent} />
-          </div>
         </div>
       </div>
     </div>
