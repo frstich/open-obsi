@@ -2,7 +2,7 @@
 import React from 'react';
 import { Note } from '@/context/NotesContext';
 import { Button } from '@/components/ui/button';
-import { Plus, ChevronDown, ChevronRight, Folder, File } from 'lucide-react';
+import { Plus, ChevronDown, ChevronRight, Folder, File, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   ContextMenu,
@@ -11,6 +11,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 interface FolderListProps {
   folders: string[];
@@ -71,14 +72,27 @@ const FolderList: React.FC<FolderListProps> = ({
                 onClick={() => toggleFolder(folder)}
               >
                 {editingFolderId === folder ? (
-                  <Input
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => handleRenameFolder(e, folder)}
-                    className="h-7 text-sm"
-                    autoFocus
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  <div className="flex items-center w-full">
+                    <Input
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => handleRenameFolder(e, folder)}
+                      className="h-7 text-sm pr-8"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-5 w-5 -ml-7 text-obsidian-lightgray hover:text-obsidian-purple"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingFolderId(null);
+                      }}
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
                 ) : (
                   <>
                     {isExpanded(folder) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

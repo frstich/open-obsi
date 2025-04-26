@@ -132,7 +132,6 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // New dedicated function for folder creation
   const createFolder = async (folderName: string): Promise<boolean> => {
     if (!session?.user || !folderName.trim()) {
       toast.error('Please sign in to create folders');
@@ -140,7 +139,14 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     
     try {
-      // Instead of creating a note right away, we'll just add an empty record for the folder
+      // Check if folder already exists
+      const existingFolders = getFolders();
+      if (existingFolders.includes(folderName.trim())) {
+        toast.error(`Folder "${folderName.trim()}" already exists`);
+        return false;
+      }
+      
+      // Create a note in the new folder
       const { data, error } = await supabase
         .from('notes')
         .insert({
@@ -152,18 +158,20 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating folder:', error);
+        throw error;
+      }
 
       // Add the new note to the state
       const newNote: Note = data as Note;
       setNotes(prev => [newNote, ...prev]);
       
-      // Don't automatically set as active note
       toast.success(`Folder "${folderName.trim()}" created`);
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating folder:', error);
-      toast.error('Failed to create folder');
+      toast.error(`Failed to create folder: ${error.message || 'Unknown error'}`);
       return false;
     }
   };
