@@ -1,73 +1,95 @@
-# Welcome to your Lovable project
+# Open Obsi Notes Nexus
 
-## Project info
+Open Obsi Notes Nexus is a modern note-taking application designed to help users organize their thoughts, ideas, and tasks efficiently. Built with a focus on simplicity and performance, it leverages cutting-edge technologies to deliver a seamless user experience.
 
-**URL**: https://lovable.dev/projects/cabf97f4-6cde-43f2-9aef-75295922fc58
+## Features
 
-## How can I edit this code?
+- **Rich Text Editing**: Create and format notes with ease using a powerful markdown editor.
+- **Folder Organization**: Organize notes into folders for better categorization.
+- **Search Functionality**: Quickly find notes with an intuitive search feature.
+- **Responsive Design**: Optimized for both desktop and mobile devices.
+- **Supabase Integration**: Securely store and manage notes in the cloud.
 
-There are several ways of editing your application.
+## Technologies Used
 
-**Use Lovable**
+This project is built using:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/cabf97f4-6cde-43f2-9aef-75295922fc58) and start prompting.
+- **Vite**: A fast and modern build tool.
+- **TypeScript**: Ensures type safety and better developer experience.
+- **React**: A library for building user interfaces.
+- **Tailwind CSS**: A utility-first CSS framework for styling.
+- **Supabase**: A backend-as-a-service for authentication and database management.
 
-Changes made via Lovable will be committed automatically to this repo.
+## How It Works
 
-**Use your preferred IDE**
+1. **Folder and Note Management**:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+   - Users can create folders to organize their notes.
+   - Notes can be added, edited, and deleted within folders.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+2. **Markdown Rendering**:
 
-Follow these steps:
+   - Notes are written in markdown and rendered into rich text for better readability.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+3. **Cloud Storage**:
+
+   - Notes and folders are stored in a Supabase database, ensuring data persistence and accessibility.
+
+4. **Search and Navigation**:
+   - A sidebar allows users to navigate between folders and notes.
+   - A search bar helps users quickly locate specific notes.
+
+## Getting Started
+
+### Prerequisites
+
+Ensure you have the following installed:
+
+- [Node.js](https://nodejs.org/) (LTS version recommended)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+
+### Installation
+
+Follow these steps to set up the project locally:
+
+```bash
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Navigate to the project directory
+cd open-obsi-notes-nexus
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:3000`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+- **src/components**: Contains reusable UI components.
+- **src/pages**: Includes the main application pages.
+- **src/context**: Manages global state and context for the application.
+- **src/hooks**: Custom hooks for specific functionalities.
+- **src/integrations**: Handles external integrations like Supabase.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Contributing
 
-## What technologies are used for this project?
+Contributions are welcome! Please follow these steps:
 
-This project is built with:
+1. Fork the repository.
+2. Create a new branch: `git checkout -b feature/your-feature-name`.
+3. Commit your changes: `git commit -m 'Add some feature'`.
+4. Push to the branch: `git push origin feature/your-feature-name`.
+5. Open a pull request.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## License
 
-## How can I deploy this project?
+This project is licensed under the [MIT License](LICENSE).
 
-Simply open [Lovable](https://lovable.dev/projects/cabf97f4-6cde-43f2-9aef-75295922fc58) and click on Share -> Publish.
+## Support
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+For any questions or issues, please contact the project maintainers.
