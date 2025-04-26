@@ -7,6 +7,7 @@ import { Plus, FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
 
 import SidebarHeader from './sidebar/SidebarHeader';
 import SidebarSearch from './sidebar/SidebarSearch';
@@ -29,13 +30,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   togglePreview,
   isPreviewVisible
 }) => {
-  const { notes, activeNote, setActiveNote, createNote, getFolders, getNotesByFolder, moveNoteToFolder } = useNotes();
+  const { notes, activeNote, setActiveNote, createNote, createFolder, getFolders, getNotesByFolder, moveNoteToFolder } = useNotes();
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [searchText, setSearchText] = useState('');
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false);
 
   const folders = getFolders();
   const unfolderedNotes = notes.filter(note => !note.folder || note.folder === '');
@@ -63,18 +65,38 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Fixed function to handle creating a new folder
-  const handleCreateFolder = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Improved folder creation handler
+  const handleCreateFolder = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newFolderName.trim()) {
-      // Create a note in the new folder to ensure the folder exists
-      createNote(newFolderName.trim());
-      setIsCreatingFolder(false);
-      setNewFolderName('');
-      toast.success(`Folder "${newFolderName.trim()}" created`);
+      setIsCreatingFolderLoading(true);
+      try {
+        // Use the dedicated folder creation function
+        const success = await createFolder(newFolderName.trim());
+        
+        if (success) {
+          // Auto-expand the newly created folder
+          setExpandedFolders(prev => ({
+            ...prev,
+            [newFolderName.trim()]: true
+          }));
+          
+          // Reset UI state
+          setIsCreatingFolder(false);
+          setNewFolderName('');
+        }
+      } finally {
+        setIsCreatingFolderLoading(false);
+      }
     } else if (e.key === 'Escape') {
       setIsCreatingFolder(false);
       setNewFolderName('');
     }
+  };
+
+  // Function to cancel folder creation
+  const cancelFolderCreation = () => {
+    setIsCreatingFolder(false);
+    setNewFolderName('');
   };
 
   // Drag and Drop handlers
@@ -193,15 +215,32 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 {isCreatingFolder && (
-                  <div className="mb-1 px-1">
-                    <input
-                      value={newFolderName}
-                      onChange={(e) => setNewFolderName(e.target.value)}
-                      onKeyDown={handleCreateFolder}
-                      placeholder="New folder name..."
-                      className="h-7 text-sm"
-                      autoFocus
-                    />
+                  <div className="mb-2 px-1">
+                    <div className="relative">
+                      <Input
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                        onKeyDown={handleCreateFolder}
+                        placeholder="New folder name..."
+                        className="h-7 text-sm pr-8"
+                        autoFocus
+                        disabled={isCreatingFolderLoading}
+                      />
+                      <div className="absolute right-2 top-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
+                          onClick={cancelFolderCreation}
+                          disabled={isCreatingFolderLoading}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-obsidian-lightgray mt-1">
+                      Press Enter to create or Escape to cancel
+                    </div>
                   </div>
                 )}
 

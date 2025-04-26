@@ -59,13 +59,13 @@ const FolderList: React.FC<FolderListProps> = ({
         <ContextMenu key={folder}>
           <ContextMenuTrigger>
             <div 
-              className="mb-1"
+              className="mb-2 rounded-md overflow-hidden hover:bg-obsidian-hover/20"
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, folder)}
             >
               <div 
                 className={cn(
-                  "flex items-center gap-1 px-1 py-0.5 rounded cursor-pointer hover:bg-obsidian-hover text-sm",
+                  "flex items-center gap-1 px-1 py-1 rounded cursor-pointer hover:bg-obsidian-hover text-sm",
                   draggedNoteId ? "bg-obsidian-gray" : ""
                 )}
                 onClick={() => toggleFolder(folder)}
@@ -125,6 +125,12 @@ const FolderList: React.FC<FolderListProps> = ({
           </ContextMenuContent>
         </ContextMenu>
       ))}
+      
+      {folders.length === 0 && (
+        <div className="text-sm text-obsidian-lightgray px-2 py-1 italic">
+          Use the folder icon to create folders
+        </div>
+      )}
     </>
   );
 };

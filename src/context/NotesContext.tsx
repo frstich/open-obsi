@@ -18,6 +18,7 @@ type NotesContextType = {
   activeNote: Note | null;
   setActiveNote: (note: Note | null) => void;
   createNote: (folder?: string) => void;
+  createFolder: (folderName: string) => Promise<boolean>;
   updateNote: (note: Note) => void;
   deleteNote: (id: string) => void;
   getFolders: () => string[];
@@ -128,6 +129,42 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (error) {
       console.error('Error creating note:', error);
       toast.error('Failed to create note');
+    }
+  };
+
+  // New dedicated function for folder creation
+  const createFolder = async (folderName: string): Promise<boolean> => {
+    if (!session?.user || !folderName.trim()) {
+      toast.error('Please sign in to create folders');
+      return false;
+    }
+    
+    try {
+      // Instead of creating a note right away, we'll just add an empty record for the folder
+      const { data, error } = await supabase
+        .from('notes')
+        .insert({
+          title: `${folderName} - Welcome`,
+          content: `# Welcome to ${folderName}\nThis is your first note in this folder.`,
+          folder: folderName.trim(),
+          user_id: session.user.id
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add the new note to the state
+      const newNote: Note = data as Note;
+      setNotes(prev => [newNote, ...prev]);
+      
+      // Don't automatically set as active note
+      toast.success(`Folder "${folderName.trim()}" created`);
+      return true;
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      toast.error('Failed to create folder');
+      return false;
     }
   };
 
@@ -246,6 +283,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         activeNote,
         setActiveNote,
         createNote,
+        createFolder,
         updateNote,
         deleteNote,
         getFolders,
