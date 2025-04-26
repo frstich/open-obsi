@@ -1,19 +1,22 @@
+import React, { useState, useEffect } from "react";
+import { useNotes } from "../context/NotesTypes";
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Plus, FolderPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
 
-import React, { useState } from 'react';
-import { useNotes } from '../context/NotesContext';
-import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus, FolderPlus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { toast } from 'sonner';
-import { Input } from '@/components/ui/input';
-
-import SidebarHeader from './sidebar/SidebarHeader';
-import SidebarSearch from './sidebar/SidebarSearch';
-import FolderList from './sidebar/FolderList';
-import NoteList from './sidebar/NoteList';
-import CollapsedSidebar from './sidebar/CollapsedSidebar';
+import SidebarHeader from "./sidebar/SidebarHeader";
+import SidebarSearch from "./sidebar/SidebarSearch";
+import FolderList from "./sidebar/FolderList";
+import NoteList from "./sidebar/NoteList";
+import CollapsedSidebar from "./sidebar/CollapsedSidebar";
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -23,102 +26,134 @@ interface SidebarProps {
   isPreviewVisible: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  isCollapsed, 
-  toggle, 
+const Sidebar: React.FC<SidebarProps> = ({
+  isCollapsed,
+  toggle,
   openCommandPalette,
   togglePreview,
-  isPreviewVisible
+  isPreviewVisible,
 }) => {
-  const { notes, activeNote, setActiveNote, createNote, createFolder, getFolders, getNotesByFolder, moveNoteToFolder } = useNotes();
-  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
-  const [searchText, setSearchText] = useState('');
+  const {
+    notes,
+    activeNote,
+    setActiveNote,
+    createNote,
+    createFolder,
+    getFolders: fetchFolders,
+    getNotesByFolder,
+    moveNoteToFolder,
+  } = useNotes();
+  const [folders, setFolders] = useState<Array<{ id: string; name: string }>>(
+    []
+  );
+  const [expandedFolders, setExpandedFolders] = useState<
+    Record<string, boolean>
+  >({});
+  const [searchText, setSearchText] = useState("");
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null);
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isCreatingFolderLoading, setIsCreatingFolderLoading] = useState(false);
 
-  const folders = getFolders();
-  const unfolderedNotes = notes.filter(note => !note.folder || note.folder === '');
+  // Fetch folders on component mount and when they change
+  useEffect(() => {
+    const loadFolders = async () => {
+      const folderList = await fetchFolders();
+      setFolders(folderList);
+    };
+    loadFolders();
+  }, [fetchFolders]);
+  const unfolderedNotes = notes.filter(
+    (note) => !note.folder || note.folder === ""
+  );
   const filteredNotes = searchText
-    ? notes.filter(note => 
-        note.title.toLowerCase().includes(searchText.toLowerCase()) || 
-        note.content.toLowerCase().includes(searchText.toLowerCase())
+    ? notes.filter(
+        (note) =>
+          note.title.toLowerCase().includes(searchText.toLowerCase()) ||
+          note.content.toLowerCase().includes(searchText.toLowerCase())
       )
     : [];
 
   const toggleFolder = (folder: string) => {
-    setExpandedFolders(prev => ({
+    setExpandedFolders((prev) => ({
       ...prev,
-      [folder]: !prev[folder]
+      [folder]: !prev[folder],
     }));
   };
 
-  const handleCreateNote = (folder: string = '') => {
+  const handleCreateNote = (folder: string = "") => {
     createNote(folder);
     if (folder) {
-      setExpandedFolders(prev => ({
+      setExpandedFolders((prev) => ({
         ...prev,
-        [folder]: true
+        [folder]: true,
       }));
     }
   };
 
   // Improved folder creation handler
-  const handleCreateFolder = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && newFolderName.trim()) {
+  const handleCreateFolder = async (
+    e: React.KeyboardEvent<HTMLInputElement>
+  ) => {
+    if (e.key === "Enter" && newFolderName.trim()) {
       setIsCreatingFolderLoading(true);
       try {
         // Use the dedicated folder creation function
         const success = await createFolder(newFolderName.trim());
-        
+
         if (success) {
           // Auto-expand the newly created folder
-          setExpandedFolders(prev => ({
+          setExpandedFolders((prev) => ({
             ...prev,
-            [newFolderName.trim()]: true
+            [newFolderName.trim()]: true,
           }));
-          
+
           // Reset UI state
           setIsCreatingFolder(false);
-          setNewFolderName('');
+          setNewFolderName("");
         }
       } finally {
         setIsCreatingFolderLoading(false);
       }
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setIsCreatingFolder(false);
-      setNewFolderName('');
+      setNewFolderName("");
     }
   };
 
   // Function to cancel folder creation
   const cancelFolderCreation = () => {
     setIsCreatingFolder(false);
-    setNewFolderName('');
+    setNewFolderName("");
   };
 
   // Drag and Drop handlers
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, noteId: string) => {
-    e.dataTransfer.setData('text/plain', noteId);
+  const handleDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    noteId: string
+  ) => {
+    e.dataTransfer.setData("text/plain", noteId);
     setDraggedNoteId(noteId);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetFolder: string) => {
+  const handleDrop = (
+    e: React.DragEvent<HTMLDivElement>,
+    targetFolder: string
+  ) => {
     e.preventDefault();
-    const noteId = e.dataTransfer.getData('text/plain');
-    
+    const noteId = e.dataTransfer.getData("text/plain");
+
     if (noteId && targetFolder) {
       moveNoteToFolder(noteId, targetFolder);
       toast.success(`Note moved to ${targetFolder}`);
     }
-    
+
     setDraggedNoteId(null);
   };
 
@@ -126,25 +161,34 @@ const Sidebar: React.FC<SidebarProps> = ({
     setDraggedNoteId(null);
   };
 
-  const handleRenameFolder = (e: React.KeyboardEvent<HTMLInputElement>, oldName: string) => {
-    if (e.key === 'Enter' && newFolderName.trim() && newFolderName !== oldName) {
+  const handleRenameFolder = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    oldName: string
+  ) => {
+    if (
+      e.key === "Enter" &&
+      newFolderName.trim() &&
+      newFolderName !== oldName
+    ) {
       const notesInFolder = getNotesByFolder(oldName);
-      notesInFolder.forEach(note => {
+      notesInFolder.forEach((note) => {
         moveNoteToFolder(note.id, newFolderName.trim());
       });
       setEditingFolderId(null);
       toast.success(`Folder renamed to ${newFolderName}`);
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       setEditingFolderId(null);
     }
   };
 
   return (
-    <div className={cn(
-      "fixed left-0 top-0 h-full bg-obsidian border-r border-obsidian-border flex flex-col transition-all duration-300",
-      isCollapsed ? "w-12" : "w-64"
-    )}>
-      <SidebarHeader 
+    <div
+      className={cn(
+        "fixed left-0 top-0 h-full bg-obsidian border-r border-obsidian-border flex flex-col transition-all duration-300",
+        isCollapsed ? "w-12" : "w-64"
+      )}
+    >
+      <SidebarHeader
         isCollapsed={isCollapsed}
         toggle={toggle}
         togglePreview={togglePreview}
@@ -153,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {!isCollapsed ? (
         <>
-          <SidebarSearch 
+          <SidebarSearch
             searchText={searchText}
             setSearchText={setSearchText}
             isCollapsed={isCollapsed}
@@ -162,7 +206,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           <ScrollArea className="flex-1">
             {searchText ? (
               <div className="px-2 py-1">
-                <div className="text-xs text-obsidian-lightgray mb-1">Search Results</div>
+                <div className="text-xs text-obsidian-lightgray mb-1">
+                  Search Results
+                </div>
                 {filteredNotes.length > 0 ? (
                   <NoteList
                     notes={filteredNotes}
@@ -173,7 +219,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                     handleDragEnd={handleDragEnd}
                   />
                 ) : (
-                  <div className="text-sm text-obsidian-lightgray px-2 py-1">No results found</div>
+                  <div className="text-sm text-obsidian-lightgray px-2 py-1">
+                    No results found
+                  </div>
                 )}
               </div>
             ) : (
@@ -183,9 +231,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
                           onClick={() => setIsCreatingFolder(true)}
                         >
@@ -198,9 +246,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
                           onClick={() => handleCreateNote()}
                         >
@@ -245,7 +293,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
 
                 <FolderList
-                  folders={folders}
+                  folders={folders.map((f) => f.name)}
                   expandedFolders={expandedFolders}
                   toggleFolder={toggleFolder}
                   getNotesByFolder={getNotesByFolder}

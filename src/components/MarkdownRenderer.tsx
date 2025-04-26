@@ -1,10 +1,9 @@
-
-import React from 'react';
-import { useNotes, Note } from '../context/NotesContext';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import React from "react";
+import { useNotes, Note } from "../context/NotesTypes";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 interface MarkdownRendererProps {
   content: string;
@@ -19,23 +18,27 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
   // Process content to transform internal links
   const processedContent = content.replace(
     INTERNAL_LINK_REGEX,
-    (match, linkText) => `[${linkText}](#internal-link-${linkText.replace(/ /g, '-')})`
+    (match, linkText) =>
+      `[${linkText}](#internal-link-${linkText.replace(/ /g, "-")})`
   );
 
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const handleLinkClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) => {
     e.preventDefault();
-    
+
     // Check if it's an internal link
-    if (href.startsWith('#internal-link-')) {
-      const linkText = href.replace('#internal-link-', '').replace(/-/g, ' ');
-      const targetNote = notes.find(note => note.title === linkText);
-      
+    if (href.startsWith("#internal-link-")) {
+      const linkText = href.replace("#internal-link-", "").replace(/-/g, " ");
+      const targetNote = notes.find((note) => note.title === linkText);
+
       if (targetNote) {
         setActiveNote(targetNote);
       }
     } else {
       // For external links, open in a new tab
-      window.open(href, '_blank');
+      window.open(href, "_blank");
     }
   };
 
@@ -46,15 +49,19 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
         components={{
           a: ({ href, children }) => (
             <a
-              href={href || '#'}
-              onClick={(e) => handleLinkClick(e, href || '#')}
-              className={href?.startsWith('#internal-link-') ? 'internal-link' : undefined}
+              href={href || "#"}
+              onClick={(e) => handleLinkClick(e, href || "#")}
+              className={
+                href?.startsWith("#internal-link-")
+                  ? "internal-link"
+                  : undefined
+              }
             >
               {children}
             </a>
           ),
           code: ({ node, className, children, ...props }: any) => {
-            const match = /language-(\w+)/.exec(className || '');
+            const match = /language-(\w+)/.exec(className || "");
             return !props.inline && match ? (
               <SyntaxHighlighter
                 style={atomDark}
@@ -62,14 +69,14 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
                 PreTag="div"
                 {...props}
               >
-                {String(children).replace(/\n$/, '')}
+                {String(children).replace(/\n$/, "")}
               </SyntaxHighlighter>
             ) : (
               <code className={className} {...props}>
                 {children}
               </code>
             );
-          }
+          },
         }}
       >
         {processedContent}

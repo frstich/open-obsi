@@ -1,8 +1,7 @@
-
-import React from 'react';
-import { Note } from '@/context/NotesContext';
-import { File } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { Note } from "@/context/NotesTypes";
+import { File } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface NoteListProps {
   notes: Note[];
@@ -23,7 +22,7 @@ const NoteList: React.FC<NoteListProps> = ({
 }) => {
   return (
     <>
-      {notes.map(note => (
+      {notes.map((note) => (
         <div
           key={note.id}
           draggable

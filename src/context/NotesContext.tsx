@@ -1,41 +1,26 @@
-
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Note, Folder, NotesContextType, NotesContext } from "./NotesTypes";
 
-export type Note = {
-  id: string;
-  title: string;
-  content: string | null;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-  folder?: string; // Add folder as an optional property
-};
+export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  type SessionType = {
+    user: {
+      id: string;
+    };
+  } | null;
 
-type NotesContextType = {
-  notes: Note[];
-  activeNote: Note | null;
-  setActiveNote: (note: Note | null) => void;
-  createNote: (folder?: string) => void;
-  createFolder: (folderName: string) => Promise<boolean>;
-  updateNote: (note: Note) => void;
-  deleteNote: (id: string) => void;
-  getFolders: () => string[];
-  getNotesByFolder: (folder: string) => Note[];
-  moveNoteToFolder: (noteId: string, targetFolder: string) => void;
-};
-
-const NotesContext = createContext<NotesContextType | undefined>(undefined);
-
-export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<SessionType>(null);
 
   useEffect(() => {
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
     });
 
@@ -54,13 +39,14 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // Subscribe to realtime changes
       const channel = supabase
-        .channel('public:notes')
-        .on('postgres_changes', 
+        .channel("public:notes")
+        .on(
+          "postgres_changes",
           {
-            event: '*',
-            schema: 'public',
-            table: 'notes'
-          }, 
+            event: "*",
+            schema: "public",
+            table: "notes",
+          },
           (payload) => {
             fetchNotes();
           }
@@ -79,9 +65,9 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const fetchNotes = async () => {
     try {
       const { data, error } = await supabase
-        .from('notes')
-        .select('*')
-        .order('updated_at', { ascending: false });
+        .from("notes")
+        .select("*")
+        .order("updated_at", { ascending: false });
 
       if (error) throw error;
 
@@ -89,23 +75,28 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const typedNotes: Note[] = data || [];
       setNotes(typedNotes);
     } catch (error) {
-      console.error('Error fetching notes:', error);
-      toast.error('Failed to fetch notes');
+      console.error("Error fetching notes:", error);
+      toast.error("Failed to fetch notes");
     }
   };
 
   const createNote = async (folder: string = "") => {
     if (!session?.user) {
-      toast.error('Please sign in to create notes');
+      toast.error("Please sign in to create notes");
       return;
     }
 
     try {
       // Define the note data without folder if it's empty
-      const noteData: any = {
+      const noteData: {
+        title: string;
+        content: string;
+        user_id: string;
+        folder?: string;
+      } = {
         title: "Untitled Note",
         content: "# Untitled Note",
-        user_id: session.user.id
+        user_id: session.user.id,
       };
 
       // Only add folder if it's not empty
@@ -114,7 +105,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const { data, error } = await supabase
-        .from('notes')
+        .from("notes")
         .insert(noteData)
         .select()
         .single();
@@ -123,55 +114,70 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       // Convert to Note type
       const newNote: Note = data as Note;
-      setNotes(prev => [newNote, ...prev]);
+      setNotes((prev) => [newNote, ...prev]);
       setActiveNote(newNote);
-      toast.success('Note created');
+      toast.success("Note created");
     } catch (error) {
-      console.error('Error creating note:', error);
-      toast.error('Failed to create note');
+      console.error("Error creating note:", error);
+      toast.error("Failed to create note");
     }
   };
 
   const createFolder = async (folderName: string): Promise<boolean> => {
     if (!session?.user || !folderName.trim()) {
-      toast.error('Please sign in to create folders');
+      toast.error("Please sign in to create folders");
       return false;
     }
-    
+
     try {
-      // Check if folder already exists
-      const existingFolders = getFolders();
-      if (existingFolders.includes(folderName.trim())) {
-        toast.error(`Folder "${folderName.trim()}" already exists`);
-        return false;
-      }
-      
-      // Create a note in the new folder
-      const { data, error } = await supabase
-        .from('notes')
+      // First create the folder in the folders table
+      const { data: folderData, error: folderError } = await supabase
+        .from("folders")
         .insert({
-          title: `${folderName} - Welcome`,
-          content: `# Welcome to ${folderName}\nThis is your first note in this folder.`,
-          folder: folderName.trim(),
-          user_id: session.user.id
+          name: folderName.trim(),
+          user_id: session.user.id,
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating folder:', error);
-        throw error;
+      if (folderError) {
+        // Check if error is due to unique constraint
+        if (folderError.code === "23505") {
+          toast.error(`Folder "${folderName.trim()}" already exists`);
+          return false;
+        }
+        throw folderError;
+      }
+
+      // Create a welcome note in the new folder
+      const insertPayload = {
+        title: `${folderName} - Welcome`,
+        content: `# Welcome to ${folderName}\nThis is your first note in this folder.`,
+        folder: folderName.trim(),
+        user_id: session.user.id,
+      };
+
+      const { data: noteData, error: noteError } = await supabase
+        .from("notes")
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (noteError) {
+        // If note creation fails, delete the folder
+        await supabase.from("folders").delete().eq("id", folderData.id);
+        throw noteError;
       }
 
       // Add the new note to the state
-      const newNote: Note = data as Note;
-      setNotes(prev => [newNote, ...prev]);
-      
+      const newNote: Note = noteData as Note;
+      setNotes((prev) => [newNote, ...prev]);
+
       toast.success(`Folder "${folderName.trim()}" created`);
       return true;
-    } catch (error: any) {
-      console.error('Error creating folder:', error);
-      toast.error(`Failed to create folder: ${error.message || 'Unknown error'}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      toast.error(`Failed to create folder: ${err.message || "Unknown error"}`);
       return false;
     }
   };
@@ -181,9 +187,13 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     try {
       // Create an update object with only the fields Supabase expects
-      const updateData: any = {
+      const updateData: {
+        title: string;
+        content: string | null;
+        folder?: string;
+      } = {
         title: updatedNote.title,
-        content: updatedNote.content
+        content: updatedNote.content,
       };
 
       // Only add folder if it exists in the updated note
@@ -192,26 +202,28 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       const { error } = await supabase
-        .from('notes')
+        .from("notes")
         .update(updateData)
-        .eq('id', updatedNote.id);
+        .eq("id", updatedNote.id);
 
       if (error) throw error;
 
-      setNotes(prev => 
-        prev.map(note => 
-          note.id === updatedNote.id ? updatedNote : note
-        )
+      setNotes((prev) =>
+        prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
       );
-      
+
       if (activeNote?.id === updatedNote.id) {
         setActiveNote(updatedNote);
       }
 
-      toast.success('Note updated');
-    } catch (error) {
-      console.error('Error updating note:', error);
-      toast.error('Failed to update note');
+      toast.success("Note updated");
+    } catch (error: unknown) {
+      const updateErr = error as { message?: string };
+      console.error(
+        "Error updating note:",
+        updateErr.message || "Unknown error"
+      );
+      toast.error("Failed to update note");
     }
   };
 
@@ -219,68 +231,117 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!session?.user) return;
 
     try {
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from("notes").delete().eq("id", id);
 
       if (error) throw error;
 
-      setNotes(prev => prev.filter(note => note.id !== id));
-      
+      setNotes((prev) => prev.filter((note) => note.id !== id));
+
       if (activeNote?.id === id) {
-        const nextNote = notes.find(note => note.id !== id);
+        const nextNote = notes.find((note) => note.id !== id);
         setActiveNote(nextNote || null);
       }
 
-      toast.success('Note deleted');
-    } catch (error) {
-      console.error('Error deleting note:', error);
-      toast.error('Failed to delete note');
+      toast.success("Note deleted");
+    } catch (error: unknown) {
+      const deleteErr = error as { message?: string };
+      console.error(
+        "Error deleting note:",
+        deleteErr.message || "Unknown error"
+      );
+      toast.error("Failed to delete note");
     }
   };
 
-  const getFolders = () => {
-    const folders = notes
-      .map(note => note.folder)
-      .filter((folder): folder is string => Boolean(folder));
-    return [...new Set(folders)];
+  const getFolders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("folders")
+        .select("*")
+        .order("name");
+
+      if (error) throw error;
+
+      return data as Folder[];
+    } catch (error: unknown) {
+      console.error("Error fetching folders:", error);
+      toast.error("Failed to fetch folders");
+      return [];
+    }
   };
 
   const getNotesByFolder = (folder: string) => {
-    return notes.filter(note => note.folder === folder);
+    return notes.filter((note) => note.folder === folder);
   };
 
   const moveNoteToFolder = async (noteId: string, targetFolder: string) => {
-    const noteToUpdate = notes.find(note => note.id === noteId);
-    
+    const noteToUpdate = notes.find((note) => note.id === noteId);
+
     if (!noteToUpdate || !session?.user) return;
-    
+
     try {
       const updatedNote = { ...noteToUpdate, folder: targetFolder };
-      
+
       // Create an update object with only the folder property
-      const updateData: any = { folder: targetFolder };
-      
+      const updateData = { folder: targetFolder };
+
       const { error } = await supabase
-        .from('notes')
+        .from("notes")
         .update(updateData)
-        .eq('id', noteId);
-        
+        .eq("id", noteId);
+
       if (error) throw error;
-      
-      setNotes(prev => prev.map(note => 
-        note.id === noteId ? updatedNote : note
-      ));
-      
+
+      setNotes((prev) =>
+        prev.map((note) => (note.id === noteId ? updatedNote : note))
+      );
+
       if (activeNote?.id === noteId) {
         setActiveNote(updatedNote);
       }
-      
+
       toast.success(`Note moved to ${targetFolder}`);
     } catch (error) {
-      console.error('Error moving note:', error);
-      toast.error('Failed to move note');
+      console.error("Error moving note:", error);
+      toast.error("Failed to move note");
+    }
+  };
+
+  const deleteFolder = async (folderName: string): Promise<boolean> => {
+    if (!session?.user) {
+      toast.error("Please sign in to delete folders");
+      return false;
+    }
+
+    try {
+      // First delete all notes in the folder
+      const { error: notesError } = await supabase
+        .from("notes")
+        .delete()
+        .eq("folder", folderName);
+
+      if (notesError) throw notesError;
+
+      // Then delete the folder
+      const { error: folderError } = await supabase
+        .from("folders")
+        .delete()
+        .eq("name", folderName);
+
+      if (folderError) throw folderError;
+
+      // Update local state
+      setNotes((prev) => prev.filter((note) => note.folder !== folderName));
+      if (activeNote?.folder === folderName) {
+        setActiveNote(null);
+      }
+
+      toast.success(`Folder "${folderName}" deleted`);
+      return true;
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      toast.error(`Failed to delete folder: ${err.message || "Unknown error"}`);
+      return false;
     }
   };
 
@@ -294,20 +355,13 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         createFolder,
         updateNote,
         deleteNote,
+        deleteFolder,
         getFolders,
         getNotesByFolder,
-        moveNoteToFolder
+        moveNoteToFolder,
       }}
     >
       {children}
     </NotesContext.Provider>
   );
-};
-
-export const useNotes = () => {
-  const context = useContext(NotesContext);
-  if (context === undefined) {
-    throw new Error("useNotes must be used within a NotesProvider");
-  }
-  return context;
 };
