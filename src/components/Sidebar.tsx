@@ -63,6 +63,20 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  // Fixed function to handle creating a new folder
+  const handleCreateFolder = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newFolderName.trim()) {
+      // Create a note in the new folder to ensure the folder exists
+      createNote(newFolderName.trim());
+      setIsCreatingFolder(false);
+      setNewFolderName('');
+      toast.success(`Folder "${newFolderName.trim()}" created`);
+    } else if (e.key === 'Escape') {
+      setIsCreatingFolder(false);
+      setNewFolderName('');
+    }
+  };
+
   // Drag and Drop handlers
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, noteId: string) => {
     e.dataTransfer.setData('text/plain', noteId);
