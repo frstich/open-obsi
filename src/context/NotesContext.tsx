@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Note, Folder, NotesContextType, NotesContext } from "./NotesTypes";
+import { Note, Folder, NotesContext } from "./NotesTypes";
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
   children,

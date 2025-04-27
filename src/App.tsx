@@ -6,10 +6,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import { CanvasView } from "./components/CanvasView";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { NotesProvider } from "./context/NotesContext";
+import Index from "./pages/Index";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +56,7 @@ const App = () => (
               path="/"
               element={
                 <PrivateRoute>
-                  <CanvasView />
+                  <Index />
                 </PrivateRoute>
               }
             />
