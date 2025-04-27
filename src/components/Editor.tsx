@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useNotes, Note } from "../context/NotesTypes"; // Adjusted import path if necessary
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import debounce from "lodash.debounce";
+import { useNotes, Note } from "../context/NotesTypes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Save, Trash, Copy, CopyCheck } from "lucide-react";
@@ -13,53 +14,87 @@ const Editor: React.FC<{
   isPreviewVisible: boolean;
 }> = ({ className, isCollapsed, isPreviewVisible }) => {
   const { activeNote, updateNote, deleteNote } = useNotes();
-  const [isEditing, setIsEditing] = useState(false); // Primarily for Markdown title/content
-  const [editedContent, setEditedContent] = useState<string | null>(null); // Markdown content
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState<string>("");
   const [editedTitle, setEditedTitle] = useState("");
   const [isCopied, setIsCopied] = useState(false);
-  const [lastSavedContent, setLastSavedContent] = useState<string | null>(null);
+  const [lastSavedContent, setLastSavedContent] = useState<string>("");
   const [lastSavedTitle, setLastSavedTitle] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "typing" | "saving" | "saved"
+  >("idle"); // New state for save status
   const { toast } = useToast();
+  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Ref for the 'saved' timeout
 
-  // Debounced save function specifically for Markdown content changes
-  const debouncedMarkdownSave = useMemo(() => {
-    let timeoutId: NodeJS.Timeout;
-    return (note: Note) => {
-      if (note.type !== "markdown") return; // Only save markdown content this way
+  // Refs to hold the latest values for the debounced function
+  const editedTitleRef = useRef(editedTitle);
+  const editedContentRef = useRef(editedContent);
 
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(async () => {
-        try {
-          setIsSaving(true);
-          // Only update title and content for markdown notes via debounce
-          const noteToUpdate = {
-            ...note,
-            title: editedTitle, // Include title in debounce as well
-            content: editedContent,
-            updated_at: new Date().toISOString(),
-          };
-          await updateNote(noteToUpdate);
-          setLastSavedContent(editedContent);
-          setLastSavedTitle(editedTitle); // Update last saved title here too
-          toast({
-            title: "Changes saved",
-            description: "Markdown changes have been auto-saved.",
-            duration: 1000,
-          });
-        } catch (error) {
-          toast({
-            title: "Save failed",
-            description: "Failed to auto-save changes. Try manual save.",
-            variant: "destructive",
-            duration: 3000,
-          });
-        } finally {
-          setIsSaving(false);
-        }
-      }, 1000); // 1-second debounce
-    };
-  }, [updateNote, toast, editedTitle, editedContent]); // Add editedTitle and editedContent dependencies
+  useEffect(() => {
+    editedTitleRef.current = editedTitle;
+  }, [editedTitle]);
+
+  useEffect(() => {
+    editedContentRef.current = editedContent;
+  }, [editedContent]);
+
+  // Debounced save function using lodash.debounce
+  const debouncedSave = useCallback(
+    debounce(async (noteToSave: Note) => {
+      // Use refs to get the latest values when the debounced function executes
+      const currentTitle = editedTitleRef.current;
+      const currentContent = editedContentRef.current;
+
+      // Double-check if it's still a markdown note before saving
+      if (noteToSave.type !== "markdown") {
+        console.warn("Debounced save called for non-markdown note. Skipping.");
+        return;
+      }
+
+      // Avoid saving if nothing actually changed (compared to last *saved* state)
+      // This check might be slightly redundant due to the trigger useEffect, but adds safety
+      if (
+        currentTitle === lastSavedTitle &&
+        currentContent === lastSavedContent
+      ) {
+        // console.log("Debounced save skipped: No changes detected.");
+        // console.log("Debounced save skipped: No changes detected.");
+        setSaveStatus("idle"); // Reset status if no changes
+        return;
+      }
+
+      setSaveStatus("saving"); // Indicate saving process started
+      try {
+        const noteToUpdate: Note = {
+          ...noteToSave,
+          title: currentTitle,
+          content: currentContent, // Already a string
+          updated_at: new Date().toISOString(),
+        };
+        await updateNote(noteToUpdate);
+        setLastSavedTitle(currentTitle);
+        setLastSavedContent(currentContent);
+        setSaveStatus("saved"); // Indicate saving completed
+        // Toast is optional now with the status indicator
+        // toast({
+        //   title: "Changes saved",
+        //   description: "Note auto-saved.",
+        //   duration: 1500,
+        // });
+      } catch (error) {
+        console.error("Auto-save failed:", error);
+        setSaveStatus("idle"); // Reset status on failure
+        toast({
+          title: "Save failed",
+          description: "Failed to auto-save changes. Try manual save.",
+          variant: "destructive",
+          duration: 3000,
+        });
+      }
+      // No finally block needed for setIsSaving anymore
+    }, 1500),
+    [updateNote, toast, lastSavedTitle, lastSavedContent] // Removed setIsSaving
+  );
 
   // Effect to initialize state when activeNote changes
   useEffect(() => {
@@ -72,47 +107,86 @@ const Editor: React.FC<{
         setLastSavedContent(content);
       } else {
         // For canvas or other types, clear markdown-specific content state
-        setEditedContent(null);
-        setLastSavedContent(null);
+        setEditedContent(""); // Set to empty string for non-markdown
+        setLastSavedContent("");
       }
-      setIsEditing(false); // Reset editing state on note change
+      setIsEditing(false);
+      setSaveStatus("idle"); // Reset save status on note change
     } else {
       // Clear state if no note is active
       setEditedTitle("");
-      setEditedContent(null);
+      setEditedContent("");
       setLastSavedTitle("");
-      setLastSavedContent(null);
+      setLastSavedContent("");
+      setSaveStatus("idle"); // Reset save status
     }
   }, [activeNote]);
 
-  // Auto-save effect for Markdown content and title changes
+  // Auto-save trigger effect for Markdown notes
   useEffect(() => {
-    if (!activeNote || activeNote.type !== "markdown") return;
+    if (!activeNote || activeNote.type !== "markdown") {
+      // If not a markdown note or no active note, cancel any pending saves
+      debouncedSave.cancel();
+      return;
+    }
 
     // Trigger debounce if title or markdown content has changed
     if (editedContent !== lastSavedContent || editedTitle !== lastSavedTitle) {
-      const updatedNote: Note = {
-        ...activeNote,
-        title: editedTitle,
-        content: editedContent, // Pass current edited content
-        updated_at: new Date().toISOString(),
-      };
-      debouncedMarkdownSave(updatedNote);
+      setSaveStatus("typing"); // Indicate user is typing / changes pending
+      // Pass the current activeNote structure. The debounced function
+      // will use refs internally to get the *latest* title/content when it executes.
+      debouncedSave(activeNote);
+    } else {
+      // If content matches last saved, ensure status is idle (unless currently saving/saved)
+      if (saveStatus !== "saving" && saveStatus !== "saved") {
+        setSaveStatus("idle");
+      }
     }
+
+    // Cleanup function to cancel debounce on unmount or when dependencies change significantly (like activeNote)
+    return () => {
+      debouncedSave.cancel();
+    };
   }, [
-    activeNote,
+    activeNote, // Important: Re-evaluate when the note itself changes
     editedContent,
     editedTitle,
     lastSavedContent,
     lastSavedTitle,
-    debouncedMarkdownSave,
+    debouncedSave,
+    saveStatus, // Add saveStatus as dependency if logic depends on it
   ]);
+
+  // Effect to handle the 'saved' status timeout
+  useEffect(() => {
+    // Clear any existing timeout when status changes or component unmounts
+    if (saveStatusTimeoutRef.current) {
+      clearTimeout(saveStatusTimeoutRef.current);
+      saveStatusTimeoutRef.current = null;
+    }
+
+    if (saveStatus === "saved") {
+      saveStatusTimeoutRef.current = setTimeout(() => {
+        setSaveStatus("idle");
+      }, 1500); // Keep "Saved" message for 1.5 seconds
+    }
+
+    // Cleanup function
+    return () => {
+      if (saveStatusTimeoutRef.current) {
+        clearTimeout(saveStatusTimeoutRef.current);
+      }
+    };
+  }, [saveStatus]);
 
   // Manual save function
   const handleSave = async () => {
     if (!activeNote) return;
 
-    setIsSaving(true);
+    // Cancel any pending debounced save
+    debouncedSave.cancel();
+    setSaveStatus("saving"); // Show saving status immediately
+
     try {
       const noteToUpdate: Partial<Note> & { id: string } = {
         id: activeNote.id,
@@ -123,7 +197,7 @@ const Editor: React.FC<{
 
       // Only include content if it's a markdown note
       if (activeNote.type === "markdown") {
-        noteToUpdate.content = editedContent ?? ""; // Ensure content is string
+        noteToUpdate.content = editedContent; // Already a string
       }
       // Note: Canvas data is saved within the CanvasView component itself
 
@@ -133,23 +207,25 @@ const Editor: React.FC<{
       if (activeNote.type === "markdown") {
         setLastSavedContent(editedContent);
       }
-      setIsEditing(false); // Exit editing mode for title
+      setIsEditing(false);
+      setSaveStatus("saved"); // Show saved status
 
+      // Optional: Keep toast for manual save confirmation
       toast({
         title: "Note saved",
         description: "Your changes have been manually saved.",
         duration: 2000,
       });
     } catch (error) {
+      setSaveStatus("idle"); // Reset status on failure
       toast({
         title: "Save Failed",
         description: "Could not save the note.",
         variant: "destructive",
         duration: 3000,
       });
-    } finally {
-      setIsSaving(false);
     }
+    // No finally block needed
   };
 
   const handleDelete = () => {
@@ -169,7 +245,7 @@ const Editor: React.FC<{
     let successMessage = "";
 
     if (activeNote.type === "markdown") {
-      textToCopy = editedContent ?? "";
+      textToCopy = editedContent; // Already a string
       successMessage = "Markdown content copied.";
     } else if (activeNote.type === "canvas" && activeNote.canvas_data) {
       try {
@@ -252,12 +328,33 @@ const Editor: React.FC<{
         <input
           type="text"
           value={editedTitle}
-          onChange={(e) => setEditedTitle(e.target.value)}
-          onFocus={() => setIsEditing(true)} // Allow title editing anytime
+          onChange={(e) => {
+            setEditedTitle(e.target.value);
+            // setSaveStatus("typing"); // Trigger typing status on change - Handled by useEffect
+          }}
+          onFocus={() => setIsEditing(true)}
           placeholder="Note Title"
           className="bg-transparent text-lg font-semibold flex-1 focus:outline-none focus:border-b focus:border-obsidian-purple mr-2"
         />
-        <div className="flex gap-1 items-center">
+        <div className="flex gap-2 items-center">
+          {/* Save Status Indicator */}
+          <span
+            className={cn(
+              "text-xs text-obsidian-lightgray transition-opacity duration-300",
+              saveStatus === "typing" || saveStatus === "saving"
+                ? "opacity-100 animate-pulse" // Show and pulse for typing/saving
+                : saveStatus === "saved"
+                ? "opacity-100" // Show for saved
+                : "opacity-0" // Hide for idle
+            )}
+          >
+            {saveStatus === "typing" || saveStatus === "saving"
+              ? "Syncing..."
+              : saveStatus === "saved"
+              ? "Saved"
+              : ""}
+          </span>
+
           <Button
             variant="ghost"
             size="icon"
@@ -267,22 +364,17 @@ const Editor: React.FC<{
           >
             {isCopied ? <CopyCheck size={18} /> : <Copy size={18} />}
           </Button>
-          <div className="flex items-center gap-1">
-            {isSaving && (
-              <span className="text-xs text-obsidian-lightgray animate-pulse mr-1">
-                Saving...
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleSave}
-              className="text-obsidian-lightgray hover:text-obsidian-purple"
-              title="Save Changes"
-            >
-              <Save size={18} />
-            </Button>
-          </div>
+          {/* Manual Save Button - Still useful */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleSave}
+            disabled={saveStatus === "saving"} // Disable while saving
+            className="text-obsidian-lightgray hover:text-obsidian-purple disabled:opacity-50"
+            title="Save Changes Now"
+          >
+            <Save size={18} />
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -316,8 +408,11 @@ const Editor: React.FC<{
               )}
             >
               <textarea
-                value={editedContent ?? ""} // Handle null case
-                onChange={(e) => setEditedContent(e.target.value)}
+                value={editedContent ?? ""}
+                onChange={(e) => {
+                  setEditedContent(e.target.value);
+                  // setSaveStatus("typing"); // Trigger typing status on change - Handled by useEffect
+                }}
                 placeholder="Start typing your markdown here..."
                 className="w-full h-full bg-obsidian resize-none p-4 outline-none font-mono text-sm"
               />
@@ -325,7 +420,7 @@ const Editor: React.FC<{
             {/* Markdown Preview */}
             {isPreviewVisible && (
               <div className="w-1/2 overflow-y-auto p-4">
-                <MarkdownRenderer content={editedContent ?? ""} />
+                <MarkdownRenderer content={editedContent} />
               </div>
             )}
           </div>
