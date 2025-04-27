@@ -17,19 +17,20 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
-import { Note, useNotes } from "@/context/NotesTypes";
+import { Note, useNotes } from "@/context/NotesTypes"; // Ensure Note type is imported
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
   ChevronRight,
-  File,
+  File, // Keep File icon
+  BrainCircuit, // Add BrainCircuit icon
   Folder,
   FolderPlus,
   Plus,
   X,
+  Trash2, // Keep Trash2 icon
 } from "lucide-react";
 import React, { useState } from "react";
-import { Trash2 } from "lucide-react";
 
 interface FolderListProps {
   folders: string[];
@@ -217,7 +218,19 @@ const FolderList: React.FC<FolderListProps> = ({
                     )}
                     onClick={() => setActiveNote(note)}
                   >
-                    <File size={14} className="text-obsidian-lightgray" />
+                    {/* --- Conditional Icon Rendering START --- */}
+                    {note.type === "canvas" ? (
+                      <BrainCircuit
+                        size={14}
+                        className="text-obsidian-lightgray flex-shrink-0"
+                      /> // Canvas Icon
+                    ) : (
+                      <File
+                        size={14}
+                        className="text-obsidian-lightgray flex-shrink-0"
+                      /> // Default File Icon
+                    )}
+                    {/* --- Conditional Icon Rendering END --- */}
                     <span className="truncate">{note.title}</span>
                   </div>
                 ))}

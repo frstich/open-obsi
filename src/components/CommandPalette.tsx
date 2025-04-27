@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNotes, Note } from "../context/NotesTypes";
 import {
@@ -8,9 +8,16 @@ import {
   CommandItem,
   CommandGroup,
   CommandEmpty,
-  CommandSeparator,
+  // CommandSeparator, // Removed as it's not used
 } from "@/components/ui/command";
-import { File, FolderPlus, PlusCircle, Search } from "lucide-react";
+import {
+  BrainCircuit,
+  File,
+  FolderPlus,
+  PlusCircle,
+  Search,
+  LucideIcon,
+} from "lucide-react"; // Added BrainCircuit and LucideIcon
 import { cn } from "@/lib/utils";
 
 interface CommandPaletteProps {
@@ -18,16 +25,18 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
+// Define a type for the items in the command palette list
+type CommandPaletteItem = {
+  type: "note" | "command" | "folder";
+  item: Note | string;
+  title: string;
+  icon?: LucideIcon; // Added optional icon property
+};
+
 const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const { notes, setActiveNote, createNote, getFolders } = useNotes();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredItems, setFilteredItems] = useState<
-    Array<{
-      type: "note" | "command" | "folder";
-      item: Note | string;
-      title: string;
-    }>
-  >([]);
+  const [filteredItems, setFilteredItems] = useState<CommandPaletteItem[]>([]); // Use the defined type
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -50,38 +59,49 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     if (isOpen && inputRef.current) {
       setTimeout(() => {
         inputRef.current?.focus();
-      }, 100);
+      }, 100); // Delay focus slightly for modal transition
     }
   }, [isOpen]);
 
   // Filter notes and commands based on search query
   useEffect(() => {
+    // Define base commands
+    const baseCommands: CommandPaletteItem[] = [
+      {
+        type: "command" as const,
+        item: "new-note",
+        title: "Create new note",
+        icon: PlusCircle, // Assign icon
+      },
+      {
+        type: "command" as const,
+        item: "new-canvas", // Add new canvas command
+        title: "Create new canvas",
+        icon: BrainCircuit, // Assign BrainCircuit icon
+      },
+    ];
+
     if (!searchQuery) {
-      const allNotes = notes.map((note) => ({
+      const allNotes: CommandPaletteItem[] = notes.map((note) => ({
         type: "note" as const,
         item: note,
         title: note.title,
+        icon: File, // Assign icon for notes
       }));
 
-      const folderItems = folders.map((folder) => ({
+      const folderItems: CommandPaletteItem[] = folders.map((folder) => ({
         type: "folder" as const,
         item: folder,
         title: `Folder: ${folder}`,
+        icon: FolderPlus, // Assign icon for folders
       }));
 
-      const commands = [
-        {
-          type: "command" as const,
-          item: "new-note",
-          title: "Create new note",
-        },
-      ];
-
-      setFilteredItems([...commands, ...folderItems, ...allNotes]);
+      setFilteredItems([...baseCommands, ...folderItems, ...allNotes]);
       return;
     }
 
-    const matchingNotes = notes
+    // Filter notes
+    const matchingNotes: CommandPaletteItem[] = notes
       .filter(
         (note) =>
           note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -91,9 +111,11 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
         type: "note" as const,
         item: note,
         title: note.title,
+        icon: File, // Assign icon
       }));
 
-    const matchingFolders = folders
+    // Filter folders
+    const matchingFolders: CommandPaletteItem[] = folders
       .filter((folder) =>
         folder.toLowerCase().includes(searchQuery.toLowerCase())
       )
@@ -101,11 +123,11 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
         type: "folder" as const,
         item: folder,
         title: `Folder: ${folder}`,
+        icon: FolderPlus, // Assign icon
       }));
 
-    const matchingCommands = [
-      { type: "command" as const, item: "new-note", title: "Create new note" },
-    ].filter((cmd) =>
+    // Filter commands
+    const matchingCommands: CommandPaletteItem[] = baseCommands.filter((cmd) =>
       cmd.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -114,7 +136,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
       ...matchingFolders,
       ...matchingNotes,
     ]);
-  }, [searchQuery, notes, folders]);
+  }, [searchQuery, notes, folders]); // Added folders dependency
 
   // Reset selected index when filtered items change
   useEffect(() => {
@@ -146,16 +168,21 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleSelect = (item: (typeof filteredItems)[0]) => {
+  const handleSelect = (item: CommandPaletteItem) => {
     if (item.type === "note") {
       setActiveNote(item.item as Note);
       onClose();
     } else if (item.type === "command") {
       if (item.item === "new-note") {
-        createNote();
+        createNote(); // Default creates markdown
+        onClose();
+      } else if (item.item === "new-canvas") {
+        // Handle new canvas command
+        createNote(undefined, "canvas"); // Pass 'canvas' type
         onClose();
       }
     } else if (item.type === "folder") {
+      // Assuming clicking a folder creates a new note inside it
       createNote(item.item as string);
       onClose();
     }
@@ -171,8 +198,30 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
 
   if (!isOpen) return null;
 
+  // Helper to render icon
+  const renderIcon = (IconComponent?: LucideIcon) => {
+    if (!IconComponent)
+      return <Search className="mr-2 h-4 w-4 text-obsidian-lightgray" />; // Default icon
+    return <IconComponent className="mr-2 h-4 w-4 text-obsidian-lightgray" />;
+  };
+
+  // Group items by type for rendering
+  const groupedItems = filteredItems.reduce((acc, item) => {
+    if (!acc[item.type]) {
+      acc[item.type] = [];
+    }
+    acc[item.type].push(item);
+    return acc;
+  }, {} as Record<CommandPaletteItem["type"], CommandPaletteItem[]>);
+
+  // Calculate offsets for selectedIndex highlighting
+  const commandCount = groupedItems.command?.length ?? 0;
+  const folderCount = groupedItems.folder?.length ?? 0;
+
   return createPortal(
     <div className="fixed inset-0 z-50">
+      {" "}
+      {/* Ensure it overlays everything */}
       <CommandDialog open={isOpen} onOpenChange={onClose}>
         <CommandInput
           ref={inputRef}
@@ -182,84 +231,71 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
           onKeyDown={handleKeyDown}
         />
         <CommandList ref={listRef} className="max-h-[60vh]">
-          <CommandEmpty className="py-6 text-sm text-obsidian-lightgray">
+          <CommandEmpty className="py-6 text-center text-sm text-obsidian-lightgray">
             No results found
           </CommandEmpty>
           {filteredItems.length > 0 && (
             <>
-              {filteredItems.some((item) => item.type === "command") && (
+              {groupedItems.command && (
                 <CommandGroup heading="Actions">
-                  {filteredItems
-                    .filter((item) => item.type === "command")
-                    .map((item, index) => (
-                      <CommandItem
-                        key={`${item.type}-${item.item as string}`}
-                        onSelect={() => handleSelect(item)}
-                        onMouseEnter={() => setSelectedIndex(index)}
-                        className={cn(
-                          index === selectedIndex && "bg-obsidian-selected"
-                        )}
-                      >
-                        <PlusCircle className="mr-2 h-4 w-4 text-obsidian-lightgray" />
-                        <span className="text-sm">{item.title}</span>
-                      </CommandItem>
-                    ))}
+                  {groupedItems.command.map((item, index) => (
+                    <CommandItem
+                      key={`${item.type}-${item.item as string}`}
+                      onSelect={() => handleSelect(item)}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                      className={cn(
+                        index === selectedIndex && "bg-obsidian-selected"
+                      )}
+                      value={item.title} // Add value for better accessibility/filtering if needed
+                    >
+                      {renderIcon(item.icon)}
+                      <span className="text-sm">{item.title}</span>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               )}
 
-              {filteredItems.some((item) => item.type === "folder") && (
+              {groupedItems.folder && (
                 <CommandGroup heading="Folders">
-                  {filteredItems
-                    .filter((item) => item.type === "folder")
-                    .map((item, index) => {
-                      const commandsCount = filteredItems.filter(
-                        (i) => i.type === "command"
-                      ).length;
-                      return (
-                        <CommandItem
-                          key={`${item.type}-${item.item as string}`}
-                          onSelect={() => handleSelect(item)}
-                          onMouseEnter={() =>
-                            setSelectedIndex(index + commandsCount)
-                          }
-                          className={cn(
-                            index + commandsCount === selectedIndex &&
-                              "bg-obsidian-selected"
-                          )}
-                        >
-                          <FolderPlus className="mr-2 h-4 w-4 text-obsidian-lightgray" />
-                          <span className="text-sm">{item.title}</span>
-                        </CommandItem>
-                      );
-                    })}
+                  {groupedItems.folder.map((item, index) => (
+                    <CommandItem
+                      key={`${item.type}-${item.item as string}`}
+                      onSelect={() => handleSelect(item)}
+                      onMouseEnter={() =>
+                        setSelectedIndex(index + commandCount)
+                      }
+                      className={cn(
+                        index + commandCount === selectedIndex &&
+                          "bg-obsidian-selected"
+                      )}
+                      value={item.title}
+                    >
+                      {renderIcon(item.icon)}
+                      <span className="text-sm">{item.title}</span>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               )}
 
-              {filteredItems.some((item) => item.type === "note") && (
+              {groupedItems.note && (
                 <CommandGroup heading="Notes">
-                  {filteredItems
-                    .filter((item) => item.type === "note")
-                    .map((item, index) => {
-                      const commandsAndFoldersCount = filteredItems.filter(
-                        (i) => i.type === "command" || i.type === "folder"
-                      ).length;
-                      return (
-                        <CommandItem
-                          key={(item.item as Note).id}
-                          onSelect={() => handleSelect(item)}
-                          onMouseEnter={() =>
-                            setSelectedIndex(index + commandsAndFoldersCount)
-                          }
-                          className={cn(
-                            index + commandsAndFoldersCount === selectedIndex &&
-                              "bg-obsidian-selected"
-                          )}
-                        >
-                          <File className="mr-2 h-4 w-4 text-obsidian-lightgray" />
-                          <span className="text-sm">{item.title}</span>
-                        </CommandItem>
-                      );
-                    })}
+                  {groupedItems.note.map((item, index) => (
+                    <CommandItem
+                      key={(item.item as Note).id}
+                      onSelect={() => handleSelect(item)}
+                      onMouseEnter={() =>
+                        setSelectedIndex(index + commandCount + folderCount)
+                      }
+                      className={cn(
+                        index + commandCount + folderCount === selectedIndex &&
+                          "bg-obsidian-selected"
+                      )}
+                      value={item.title}
+                    >
+                      {renderIcon(item.icon)}
+                      <span className="text-sm">{item.title}</span>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               )}
             </>
@@ -267,7 +303,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
         </CommandList>
       </CommandDialog>
     </div>,
-    document.body
+    document.body // Render directly into body
   );
 };
 

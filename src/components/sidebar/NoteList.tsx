@@ -1,6 +1,6 @@
 import React from "react";
-import { Note } from "@/context/NotesTypes";
-import { File } from "lucide-react";
+import { Note } from "@/context/NotesTypes"; // Ensure Note type is imported
+import { File, BrainCircuit } from "lucide-react"; // Add BrainCircuit icon
 import { cn } from "@/lib/utils";
 
 interface NoteListProps {
@@ -35,7 +35,16 @@ const NoteList: React.FC<NoteListProps> = ({
           )}
           onClick={() => setActiveNote(note)}
         >
-          <File size={14} className="text-obsidian-lightgray" />
+          {/* --- Conditional Icon Rendering START --- */}
+          {note.type === "canvas" ? (
+            <BrainCircuit
+              size={14}
+              className="text-obsidian-lightgray flex-shrink-0"
+            /> // Canvas Icon
+          ) : (
+            <File size={14} className="text-obsidian-lightgray flex-shrink-0" /> // Default File Icon
+          )}
+          {/* --- Conditional Icon Rendering END --- */}
           <span className="truncate">{note.title}</span>
         </div>
       ))}

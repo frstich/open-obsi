@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNotes } from "../context/NotesTypes";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, FolderPlus } from "lucide-react";
+import { Plus, FolderPlus, BrainCircuit } from "lucide-react"; // Added BrainCircuit
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -83,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const handleCreateNote = (folder: string = "") => {
-    createNote(folder);
+    createNote(folder); // Default to markdown note
     if (folder) {
       setExpandedFolders((prev) => ({
         ...prev,
@@ -144,14 +144,25 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   const handleDrop = (
     e: React.DragEvent<HTMLDivElement>,
-    targetFolder: string
+    targetFolder: string | null // Allow null for root drop
   ) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling to parent handlers if nested
     const noteId = e.dataTransfer.getData("text/plain");
 
-    if (noteId && targetFolder) {
-      moveNoteToFolder(noteId, targetFolder);
-      toast.success(`Note moved to ${targetFolder}`);
+    if (noteId) {
+      // Check if the current folder is different or if moving to root
+      const currentNote = notes.find((n) => n.id === noteId);
+      const currentFolderId = currentNote?.folder || null;
+
+      if (targetFolder !== currentFolderId) {
+        moveNoteToFolder(noteId, targetFolder);
+        if (targetFolder) {
+          toast.success(`Note moved to folder: ${targetFolder}`); // More specific message
+        } else {
+          toast.success(`Note moved to root`); // More specific message
+        }
+      }
     }
 
     setDraggedNoteId(null);
@@ -225,7 +236,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
             ) : (
-              <div className="px-2 py-1">
+              // This div now acts as the drop target for moving notes to the root (outside folders)
+              <div
+                className="px-2 py-1 flex-1 flex flex-col" // Use flex layout to ensure it fills space
+                onDrop={(e) => handleDrop(e, null)} // Handle drop event, target is null (root)
+                onDragOver={handleDragOver} // Necessary to allow dropping
+              >
+                {/* NOTES Header and Action Buttons */}
                 <div className="flex justify-between items-center mb-2">
                   <div className="text-xs text-obsidian-lightgray">NOTES</div>
                   <div className="flex gap-1">
@@ -244,13 +261,29 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <p>New Folder</p>
                       </TooltipContent>
                     </Tooltip>
+                    {/* New Canvas Button */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
-                          onClick={() => handleCreateNote()}
+                          onClick={() => createNote(undefined, "canvas")} // Using createNote directly
+                        >
+                          <BrainCircuit size={14} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>New Canvas</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-obsidian-lightgray hover:text-obsidian-purple"
+                          onClick={() => handleCreateNote()} // This creates a markdown note
                         >
                           <Plus size={14} />
                         </Button>
@@ -312,21 +345,26 @@ const Sidebar: React.FC<SidebarProps> = ({
                   handleRenameFolder={handleRenameFolder}
                 />
 
-                <NoteList
-                  notes={unfolderedNotes}
-                  activeNote={activeNote}
-                  setActiveNote={setActiveNote}
-                  draggedNoteId={draggedNoteId}
-                  handleDragStart={handleDragStart}
-                  handleDragEnd={handleDragEnd}
-                />
-              </div>
+                {/* Unfoldered Notes List */}
+                {/* This inner div prevents the NoteList itself from interfering with the parent drop zone */}
+                <div>
+                  <NoteList
+                    notes={unfolderedNotes}
+                    activeNote={activeNote}
+                    setActiveNote={setActiveNote}
+                    draggedNoteId={draggedNoteId}
+                    handleDragStart={handleDragStart}
+                    handleDragEnd={handleDragEnd}
+                    // No drop/dragOver handlers here; handled by the parent div
+                  />
+                </div>
+              </div> // Closes the root drop target div
             )}
           </ScrollArea>
         </>
       ) : (
         <CollapsedSidebar
-          handleCreateNote={() => handleCreateNote()}
+          handleCreateNote={() => handleCreateNote()} // Still creates markdown note
           openCommandPalette={openCommandPalette}
         />
       )}

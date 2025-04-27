@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types"; // Import Json type
 import { toast } from "sonner";
-import { Note, Folder, NotesContext } from "./NotesTypes";
+import { Note, Folder, NotesContext, NoteType } from "./NotesTypes"; // Ensure NoteType is imported
+import { CanvasData } from "../types/canvasTypes"; // Adjust path if needed
+import { v4 as uuidv4 } from "uuid";
 
 export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -70,9 +73,16 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
-
-      // Convert the returned data to our Note type
-      const typedNotes: Note[] = data || [];
+      // Convert the returned data to our Note type, providing defaults for new fields
+      // Cast to unknown first to handle potential type mismatches from JSONB
+      const typedNotes: Note[] = ((data as unknown[]) || []).map(
+        (note: Note) => ({
+          // Cast individual note to Note type
+          ...note,
+          type: note.type || "markdown", // Default to 'markdown'
+          canvas_data: note.canvas_data as CanvasData | null, // Cast to CanvasData | null
+        })
+      ); // No need for outer cast if map returns Note[]
       setNotes(typedNotes);
     } catch (error) {
       console.error("Error fetching notes:", error);
@@ -80,22 +90,38 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const createNote = async (folder: string = "") => {
+  const createNote = async (
+    folder: string = "",
+    type: NoteType = "markdown"
+  ) => {
     if (!session?.user) {
       toast.error("Please sign in to create notes");
       return;
     }
 
     try {
-      // Define the note data without folder if it's empty
+      let title = "Untitled Note";
+      let content = "# Untitled Note";
+      let canvas_data: CanvasData | null = null;
+
+      if (type === "canvas") {
+        title = "Untitled Canvas";
+        content = null; // Canvas notes don't have markdown content
+        canvas_data = { nodes: [], edges: [] }; // Default empty canvas data
+      }
+
       const noteData: {
         title: string;
-        content: string;
+        content: string | null;
+        canvas_data: CanvasData | null; // Keep as CanvasData | null here
+        type: NoteType;
         user_id: string;
         folder?: string;
       } = {
-        title: "Untitled Note",
-        content: "# Untitled Note",
+        title,
+        content,
+        canvas_data,
+        type,
         user_id: session.user.id,
       };
 
@@ -106,20 +132,26 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const { data, error } = await supabase
         .from("notes")
-        .insert(noteData)
+        .insert({
+          ...noteData,
+          canvas_data: noteData.canvas_data as unknown as Json | null, // Cast via unknown
+        })
         .select()
         .single();
 
       if (error) throw error;
 
       // Convert to Note type
-      const newNote: Note = data as Note;
+      const newNote: Note = data as unknown as Note; // Cast via unknown
       setNotes((prev) => [newNote, ...prev]);
       setActiveNote(newNote);
-      toast.success("Note created");
+      toast.success(`${type === "markdown" ? "Note" : "Canvas"} created`);
+      return newNote;
     } catch (error) {
       console.error("Error creating note:", error);
-      toast.error("Failed to create note");
+      toast.error(
+        `Failed to create ${type === "markdown" ? "note" : "canvas"}`
+      );
     }
   };
 
@@ -155,6 +187,8 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
         content: `# Welcome to ${folderName}\nThis is your first note in this folder.`,
         folder: folderName.trim(),
         user_id: session.user.id,
+        type: "markdown" as NoteType, // Default welcome note to markdown
+        canvas_data: null as Json | null, // Cast null to Json | null for Supabase insert
       };
 
       const { data: noteData, error: noteError } = await supabase
@@ -170,7 +204,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       // Add the new note to the state
-      const newNote: Note = noteData as Note;
+      const newNote: Note = noteData as unknown as Note; // Cast via unknown
       setNotes((prev) => [newNote, ...prev]);
 
       toast.success(`Folder "${folderName.trim()}" created`);
@@ -186,37 +220,55 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!session?.user) return;
 
     try {
-      // Create an update object with only the fields Supabase expects
+      // Create an update object that preserves all required fields
       const updateData: {
         title: string;
-        content: string | null;
-        folder?: string;
+        content?: string | null;
+        canvas_data?: Json | null;
+        folder: string | null; // Always include folder, but allow null
+        type: NoteType;
+        updated_at: string;
       } = {
         title: updatedNote.title,
-        content: updatedNote.content,
+        type: updatedNote.type,
+        folder: updatedNote.folder || null, // Always include folder, defaulting to null if not set
+        updated_at: new Date().toISOString(),
       };
 
-      // Only add folder if it exists in the updated note
-      if (updatedNote.folder !== undefined) {
-        updateData.folder = updatedNote.folder;
+      // Conditionally add content or canvas_data based on note type
+      if (updatedNote.type === "markdown") {
+        updateData.content = updatedNote.content;
+      } else if (updatedNote.type === "canvas") {
+        updateData.canvas_data =
+          updatedNote.canvas_data as unknown as Json | null;
       }
 
       const { error } = await supabase
         .from("notes")
-        .update(updateData)
+        .update(updateData) // Pass the correctly typed updateData
         .eq("id", updatedNote.id);
 
       if (error) throw error;
 
+      // Update local state with the full updated note, preserving all properties
       setNotes((prev) =>
-        prev.map((note) => (note.id === updatedNote.id ? updatedNote : note))
+        prev.map((note) =>
+          note.id === updatedNote.id
+            ? {
+                ...note, // Preserve all existing properties
+                ...updatedNote, // Apply updates
+                folder: updatedNote.folder || note.folder, // Ensure folder is preserved
+                updated_at: updateData.updated_at, // Use the new timestamp
+              }
+            : note
+        )
       );
 
       if (activeNote?.id === updatedNote.id) {
         setActiveNote(updatedNote);
       }
 
-      toast.success("Note updated");
+      // toast.success("Note updated"); // Suppress frequent updates
     } catch (error: unknown) {
       const updateErr = error as { message?: string };
       console.error(
@@ -274,16 +326,23 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
     return notes.filter((note) => note.folder === folder);
   };
 
-  const moveNoteToFolder = async (noteId: string, targetFolder: string) => {
+  const moveNoteToFolder = async (
+    noteId: string,
+    targetFolder: string | null
+  ) => {
     const noteToUpdate = notes.find((note) => note.id === noteId);
 
     if (!noteToUpdate || !session?.user) return;
 
     try {
-      const updatedNote = { ...noteToUpdate, folder: targetFolder };
+      // Normalize the folder value - treat empty string as null
+      const normalizedFolder = targetFolder === "" ? null : targetFolder;
 
-      // Create an update object with only the folder property
-      const updateData = { folder: targetFolder };
+      // Create an update object with only the folder and updated_at properties
+      const updateData = {
+        folder: normalizedFolder,
+        updated_at: new Date().toISOString(),
+      };
 
       const { error } = await supabase
         .from("notes")
@@ -291,6 +350,13 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
         .eq("id", noteId);
 
       if (error) throw error;
+
+      // Update the local state with the new folder and updated_at timestamp
+      const updatedNote = {
+        ...noteToUpdate,
+        folder: normalizedFolder,
+        updated_at: updateData.updated_at,
+      };
 
       setNotes((prev) =>
         prev.map((note) => (note.id === noteId ? updatedNote : note))
@@ -300,7 +366,7 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
         setActiveNote(updatedNote);
       }
 
-      toast.success(`Note moved to ${targetFolder}`);
+      toast.success(`Note moved to ${targetFolder || "root"}`);
     } catch (error) {
       console.error("Error moving note:", error);
       toast.error("Failed to move note");
@@ -364,4 +430,13 @@ export const NotesProvider: React.FC<{ children: React.ReactNode }> = ({
       {children}
     </NotesContext.Provider>
   );
+};
+
+// Custom hook to use the NotesContext
+export const useNotes = () => {
+  const context = React.useContext(NotesContext);
+  if (context === undefined) {
+    throw new Error("useNotes must be used within a NotesProvider");
+  }
+  return context;
 };

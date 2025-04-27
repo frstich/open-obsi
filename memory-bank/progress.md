@@ -61,3 +61,5 @@ This file tracks the progress of tasks and significant milestones.
 
 [2025-04-27 02:30:16] - Started task: Enhance CanvasView with Obsidian-like features (edge creation/selection/deletion, refined node creation).
 [2025-04-27 02:32:27] - Completed task: Implemented edge creation (click-drag), selection (click), and deletion (select + Delete/Backspace) in CanvasView. Updated node creation (double-click) to call `createNote` from context. Added optional `noteId` to `CanvasNode` type. Modified `src/components/CanvasView.tsx` and `src/context/NotesTypes.ts`.
+[2025-04-27 03:18:56] - Started task: Create Canvas components (`CustomNode.tsx`, `CanvasView.tsx`).
+[2025-04-27 03:19:52] - Completed task: Created `src/components/canvas/CustomNode.tsx` and `src/components/canvas/CanvasView.tsx`. Added `useNotes` hook to `src/context/NotesContext.tsx` to fix import error.

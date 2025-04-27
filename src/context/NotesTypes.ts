@@ -1,4 +1,5 @@
 import React, { createContext, useContext } from "react";
+import { CanvasData } from "../types/canvasTypes";
 export type Folder = {
   id: string;
   name: string;
@@ -14,20 +15,24 @@ export type Note = {
   updated_at: string;
   user_id: string;
   folder?: string;
+  type: NoteType;
+  canvas_data: CanvasData | null;
 };
+
+export type NoteType = "markdown" | "canvas";
 
 export type NotesContextType = {
   notes: Note[];
   activeNote: Note | null;
   setActiveNote: (note: Note | null) => void;
-  createNote: (folder?: string) => void;
+  createNote: (folder?: string, type?: NoteType) => Promise<Note | null>;
   createFolder: (folderName: string) => Promise<boolean>;
   updateNote: (note: Note) => void;
   deleteNote: (id: string) => void;
   deleteFolder: (folderName: string) => Promise<boolean>;
   getFolders: () => Promise<Folder[]>;
   getNotesByFolder: (folder: string) => Note[];
-  moveNoteToFolder: (noteId: string, targetFolder: string) => void;
+  moveNoteToFolder: (noteId: string, targetFolder: string | null) => void;
 };
 
 export const NotesContext = createContext<NotesContextType | undefined>(
